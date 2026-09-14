@@ -5,9 +5,11 @@ import { test } from "node:test";
 import {
 	dnsAnswerStatus,
 	findGroup,
+	isBlockedStatus,
 	isInsecureRemoteUrl,
 	PiHole,
 	parseDnsServer,
+	withPiHole,
 } from "../src/pihole.js";
 
 /** Runs fn against a local HTTP server that answers every request with handler(req, res). */
@@ -200,4 +202,79 @@ test("a redirect never receives the password", async () => {
 				},
 			),
 	);
+});
+
+/** A Pi-hole API that records requests; routes maps "METHOD /path" → [status, body]. */
+const recordingPihole = (routes, calls) => (req, res) => {
+	calls.push(`${req.method} ${decodeURIComponent(req.url)}`);
+	const [status, body] = routes[
+		`${req.method} ${decodeURIComponent(req.url)}`
+	] || [404, {}];
+	res.writeHead(status, { "content-type": "application/json" });
+	res.end(body === undefined ? undefined : JSON.stringify(body));
+};
+
+test("withPiHole always logs out, even when the work fails", async () => {
+	const calls = [];
+	const routes = {
+		"POST /api/auth": [200, { session: { valid: true, sid: "abc" } }],
+		"DELETE /api/auth": [204],
+	};
+	await withServer(recordingPihole(routes, calls), (url) =>
+		assert.rejects(
+			withPiHole({ piholeUrl: url }, "pw", async () => {
+				throw new Error("boom");
+			}),
+			/boom/,
+		),
+	);
+	assert.deepEqual(calls, ["POST /api/auth", "DELETE /api/auth"]);
+});
+
+test("deny list: duplicates are reported, missing entries aren't errors", async () => {
+	const calls = [];
+	const routes = {
+		"POST /api/auth": [200, { session: { valid: true, sid: "abc" } }],
+		"POST /api/domains/deny/regex": [
+			201,
+			{
+				processed: {
+					errors: [
+						{ item: "x", error: "UNIQUE constraint failed: domainlist.domain" },
+					],
+				},
+			},
+		],
+		"DELETE /api/domains/deny/exact/gone.example": [
+			404,
+			{ error: { message: "not found" } },
+		],
+	};
+	await withServer(recordingPihole(routes, calls), async (url) => {
+		const ph = new PiHole({ url, password: "pw" });
+		await ph.login();
+		assert.deepEqual(
+			await ph.addDeny("regex", "(\\.|^)ads\\.example$", "adhunt"),
+			{
+				ok: false,
+				exists: true,
+				error: "UNIQUE constraint failed: domainlist.domain",
+			},
+		);
+		assert.equal(await ph.removeDeny("exact", "gone.example"), false);
+	});
+});
+
+test("query log statuses that mean already blocked", () => {
+	for (const status of [
+		"GRAVITY",
+		"REGEX",
+		"DENYLIST",
+		"EXTERNAL_BLOCKED_NXRA",
+		"GRAVITY_CNAME",
+		"SPECIAL_DOMAIN",
+	])
+		assert.ok(isBlockedStatus(status), status);
+	for (const status of ["FORWARDED", "CACHE", "RETRIED", "", undefined])
+		assert.ok(!isBlockedStatus(status), String(status));
 });

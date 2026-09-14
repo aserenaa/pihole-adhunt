@@ -22,6 +22,13 @@ classifies each one with the same filter lists uBlock Origin uses, and shows exa
 getting past your Pi-hole. You pick what to block; adhunt adds it through the Pi-hole API, tagged so
 you can list or undo it later.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="adhunt scanning a news site, listing the ad and tracker domains that get past Pi-hole, and blocking the recommended ones" width="820">
+</p>
+
+<details>
+<summary>Example output as text</summary>
+
 ```text
 $ adhunt https://news.example.com
   · loading EasyList/EasyPrivacy + TrackerDB…
@@ -59,6 +66,7 @@ Block which? [r = recommended (1 2) · numbers: 1 3 5-7 · r 9 · Enter = nothin
 Blocked 2 in Pi-hole · verified via DNS: 2/2
 Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 ```
+</details>
 
 ## Features
 

@@ -11,7 +11,16 @@ const CTRL_C = "\u0003";
 function fakeTty() {
 	const stdin = new PassThrough();
 	stdin.isTTY = true;
-	stdin.setRawMode = () => stdin;
+	stdin.calls = [];
+	stdin.setRawMode = (on) => {
+		stdin.calls.push(`raw:${on}`);
+		return stdin;
+	};
+	const pause = stdin.pause.bind(stdin);
+	stdin.pause = () => {
+		stdin.calls.push("pause");
+		return pause();
+	};
 	let echoed = "";
 	const stdout = {
 		write: (text) => {
@@ -31,6 +40,8 @@ test("hidden prompt never echoes and handles backspace and Enter", async () => {
 	tty.stdin.write(`s3cx${BACKSPACE}ret\r`);
 	assert.equal(await typed, "s3cret");
 	assert.equal(tty.echoed(), "Password: \n");
+	// Windows: pausing after leaving raw mode leaves a console read that waits for Enter.
+	assert.deepEqual(tty.stdin.calls, ["raw:true", "pause", "raw:false"]);
 });
 
 test("hidden prompt: Ctrl+C cancels", async () => {

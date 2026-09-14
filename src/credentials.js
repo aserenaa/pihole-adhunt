@@ -53,6 +53,15 @@ export function forgetPassword() {
 	}
 }
 
+/**
+ * Stops reading, then leaves raw mode. The order matters on Windows: leaving raw mode while
+ * still reading restarts a line-mode console read that keeps the process alive until Enter.
+ */
+export function restoreTerminal(stdin) {
+	stdin.pause();
+	stdin.setRawMode(false);
+}
+
 const ENTER = new Set(["\r", "\n", "\u0004"]); // Ctrl+D also ends the input
 const CTRL_C = "\u0003";
 const BACKSPACE = new Set(["\u007f", "\b"]);
@@ -76,8 +85,7 @@ export function promptHidden(
 		let value = "";
 		const finish = (settle, result) => {
 			stdin.off("data", onData);
-			stdin.setRawMode(false);
-			stdin.pause();
+			restoreTerminal(stdin);
 			stdout.write("\n");
 			settle(result);
 		};

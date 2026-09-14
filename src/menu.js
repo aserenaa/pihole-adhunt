@@ -5,6 +5,8 @@ import {
 	moveCursor,
 } from "node:readline";
 
+import { restoreTerminal } from "./credentials.js";
+
 const GROUP_TITLES = {
 	block: "🔴 BLOCK",
 	review: "🟠 REVIEW",
@@ -335,8 +337,7 @@ export function selectCandidates(
 		const cleanup = () => {
 			stdin.off("keypress", onKeypress);
 			stdout.off?.("resize", draw);
-			stdin.setRawMode(false);
-			stdin.pause();
+			restoreTerminal(stdin);
 			clear();
 			stdout.write(SHOW_CURSOR);
 		};

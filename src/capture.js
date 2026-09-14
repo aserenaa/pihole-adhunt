@@ -279,7 +279,13 @@ export async function fromHar(path) {
 		redirects: [],
 		requests: entries.map((e) => ({
 			url: e.request.url,
-			type: e === doc ? "main_frame" : e._resourceType || "other",
+			// Other documents in a HAR are iframes; "document" would be read as the main frame.
+			type:
+				e === doc
+					? "main_frame"
+					: e._resourceType === "document"
+						? "sub_frame"
+						: e._resourceType || "other",
 			sourceUrl: pageUrl,
 			initiatorUrl: initiatorUrl(e._initiator),
 			popup: false,

@@ -237,3 +237,30 @@ test("a wildcard absorbs hosts of the same domain that matched no rule, in any o
 		]);
 	}
 });
+
+test("HAR: later documents are iframes, not the main frame", async (t) => {
+	const dir = await mkdtemp(join(tmpdir(), "adhunt-har-"));
+	t.after(() => rm(dir, { recursive: true, force: true }));
+	const file = join(dir, "frames.har");
+	const entry = (url, type) => ({
+		request: { url },
+		response: { status: 200 },
+		_resourceType: type,
+	});
+	await writeFile(
+		file,
+		JSON.stringify({
+			log: {
+				entries: [
+					entry("https://news.example/", "document"),
+					entry("https://ads.example/frame.html", "document"),
+				],
+			},
+		}),
+	);
+	const { requests } = await fromHar(file);
+	assert.deepEqual(
+		requests.map((r) => r.type),
+		["main_frame", "sub_frame"],
+	);
+});

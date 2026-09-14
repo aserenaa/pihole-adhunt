@@ -68,7 +68,7 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 - ↩️ **Reversible** — every entry is tagged `adhunt · site · date`; `undo`, `list` and `remove` are built in.
 - 📱 **Device mode** — no browser needed: analyze what a phone, TV or app asked your Pi-hole for in the last few minutes.
 - 📦 **HAR mode** — analyze a `.har` exported from any browser's DevTools.
-- 🔐 **No passwords in files** — the app password lives in the macOS Keychain or the `PIHOLE_PASSWORD` environment variable.
+- 🔐 **Credentials in your OS keychain** — macOS Keychain, Windows Credential Manager or Linux Secret Service (or the `PIHOLE_PASSWORD` environment variable).
 
 ## Requirements
 
@@ -83,11 +83,11 @@ git clone https://github.com/aserenaa/pihole-adhunt.git
 cd pihole-adhunt
 pnpm install
 pnpm link --global      # makes the `adhunt` command available
-adhunt setup            # Pi-hole URL + app password
+adhunt setup            # Pi-hole URL + app password (stored in your OS keychain)
 ```
 
-On macOS, `adhunt setup` stores the password in the Keychain. On other systems it saves the URL,
-and the password is read from the `PIHOLE_PASSWORD` environment variable.
+`adhunt setup` asks for the password without echoing it, checks that it works, and only then
+stores it. Without a keychain (for example on a headless Linux server), set `PIHOLE_PASSWORD` instead.
 
 <details>
 <summary><strong>No Chrome or Edge?</strong></summary>
@@ -123,7 +123,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | `adhunt remove <domain>` | Remove one entry added by adhunt |
 | `adhunt clients` | Top Pi-hole clients (to find a device's IP) |
 | `adhunt device <ip> --minutes 10` | Analyze a device's recent DNS queries |
-| `adhunt setup` | Configure the Pi-hole URL and password |
+| `adhunt setup` · `adhunt logout` | Configure the Pi-hole URL and password, or forget the stored password |
 
 | Option | Description |
 |---|---|
@@ -162,7 +162,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 ## Privacy & security
 
 - adhunt talks to your Pi-hole, to the page you scan (and whatever that page loads), and to GitHub to refresh the filter lists every few days. Nothing else.
-- The app password lives in the **macOS Keychain** or the `PIHOLE_PASSWORD` environment variable; adhunt never writes it to disk.
+- The app password lives in your **OS keychain** (macOS Keychain, Windows Credential Manager or Secret Service) or the `PIHOLE_PASSWORD` environment variable; adhunt never writes it to a file.
 - Local state (config, last scan, undo history, filter cache) lives in `~/.config/adhunt/`, or in `ADHUNT_HOME` if set.
 - **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
 - **HAR files contain cookies and session tokens.** Never share them or attach them to issues.
@@ -172,7 +172,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | Variable | Purpose |
 |---|---|
 | `PIHOLE_URL` | Pi-hole base URL (overrides `adhunt setup`) |
-| `PIHOLE_PASSWORD` | App password (overrides the Keychain) |
+| `PIHOLE_PASSWORD` | App password (overrides the keychain) |
 | `PIHOLE_DNS` | DNS server used for "already blocked" checks (defaults to the Pi-hole host) |
 | `ADHUNT_HOME` | Custom directory for config, state and cache |
 
@@ -194,6 +194,18 @@ Your corepack-managed pnpm is broken. Run `corepack disable pnpm` and install pn
 <summary><code>No browser found</code></summary>
 
 Install Google Chrome, or run `pnpm exec playwright-core install chromium`.
+</details>
+
+<details>
+<summary>macOS asks whether <code>node</code> may use "adhunt-pihole"</summary>
+
+The password was stored by another program (for example the `security` command) or by an older Node.js binary. Choose **Always Allow**, or run `adhunt setup` again to store it from the current one.
+</details>
+
+<details>
+<summary><code>Could not store the password in the system keyring</code></summary>
+
+Linux needs a running Secret Service provider such as GNOME Keyring or KWallet. On servers and containers without one, set `PIHOLE_PASSWORD` instead.
 </details>
 
 <details>

@@ -5,13 +5,15 @@ import { parseArgs, styleText } from "node:util";
 
 import { analyze, finalize, loadEngines } from "./analyze.js";
 import { capture, fromHar } from "./capture.js";
+import { CACHE_DIR, loadConfig, saveConfig } from "./config.js";
 import {
-	CACHE_DIR,
-	getPassword,
-	loadConfig,
-	saveConfig,
-	storePassword,
-} from "./config.js";
+	forgetPassword,
+	keychainName,
+	promptHidden,
+	readPassword,
+	savePassword,
+	storedPassword,
+} from "./credentials.js";
 import { pageUrl, parseSelection, wholeNumber } from "./options.js";
 import {
 	findGroup,
@@ -49,7 +51,8 @@ Usage:
   adhunt remove <domain>             remove a domain added by adhunt
   adhunt device <ip> [--minutes 15]  analyze what a device asked for (Pi-hole query log)
   adhunt clients                     devices with the most queries (to find an IP)
-  adhunt setup                       set the Pi-hole URL and store the password in the Keychain
+  adhunt setup                       set the Pi-hole URL and store the password in the system keychain
+  adhunt logout                      remove the stored password
 
 Scan options:
   -m, --mobile      emulate an iPhone (sites serve different ads on mobile)
@@ -146,7 +149,7 @@ function requireUrl(cfg) {
 }
 
 async function requirePassword() {
-	const pw = getPassword();
+	const pw = readPassword();
 	if (!pw)
 		throw new Error(
 			'Missing the Pi-hole app password. Run "adhunt setup" (or set PIHOLE_PASSWORD).',
@@ -250,7 +253,7 @@ async function cmdScan(url, opts, cfg) {
 		requireUrl(cfg);
 		password = await requirePassword();
 	} else if (cfg.piholeUrl) {
-		password = getPassword();
+		password = readPassword();
 	}
 	note("loading EasyList/EasyPrivacy + TrackerDB…");
 	const engines = await loadEngines(CACHE_DIR);
@@ -498,32 +501,48 @@ async function cmdSetup(cfg) {
 		const current = cfg.piholeUrl || "http://pi.hole";
 		const url =
 			(await rl.question(`Pi-hole URL [${current}]: `)).trim() || current;
-		cfg.piholeUrl = url.replace(/\/+$/, "");
+		cfg.piholeUrl = (url.includes("://") ? url : `http://${url}`).replace(
+			/\/+$/,
+			"",
+		);
 		say(
 			`Config saved to ${await saveConfig({ piholeUrl: cfg.piholeUrl, dnsServer: cfg.dnsServer })}`,
 		);
 	} finally {
 		rl.close();
 	}
-	if (process.platform === "darwin") {
+
+	let password = process.env.PIHOLE_PASSWORD;
+	const stored = password ? null : storedPassword();
+	if (password) {
+		note("using PIHOLE_PASSWORD (nothing is stored)");
+	} else {
 		say(
-			"Paste the Pi-hole app password (Settings → Web interface / API → Configure app password).",
+			"Pi-hole app password (Settings → Web interface / API → Configure app password).",
 		);
-		say(
-			c(
-				"dim",
-				'It is stored in the macOS Keychain as "adhunt-pihole", never in a file.',
-			),
-		);
-		if (!storePassword()) throw new Error("Could not save it to the Keychain.");
-	} else if (!process.env.PIHOLE_PASSWORD) {
-		say("Outside macOS: set PIHOLE_PASSWORD to the app password.");
-		return;
+		password =
+			(await promptHidden(
+				stored ? "Password (Enter keeps the stored one): " : "Password: ",
+			)) || stored;
+		if (!password) throw new Error("No password entered.");
 	}
-	const password = await requirePassword();
+	// Log in before storing anything, so a typo is never saved.
 	const [denied, blocking] = await session(cfg, password, (ph) =>
 		Promise.all([ph.listDeny(), ph.blocking()]),
 	);
+	if (!process.env.PIHOLE_PASSWORD && password !== stored) {
+		try {
+			savePassword(password);
+			say(
+				c(
+					"dim",
+					`Password stored in the ${keychainName} as "adhunt-pihole", never in a file.`,
+				),
+			);
+		} catch (e) {
+			warn(e.message);
+		}
+	}
 	const dns = await blockingChecker(cfg, blocking);
 	say(
 		c(
@@ -531,6 +550,16 @@ async function cmdSetup(cfg) {
 			`✓ Connected to Pi-hole (${denied.length} domains on the deny list, blocking mode ${blocking.mode}) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
 		),
 	);
+}
+
+function cmdLogout() {
+	say(
+		forgetPassword()
+			? `Removed the Pi-hole password from the ${keychainName}.`
+			: `No Pi-hole password is stored in the ${keychainName}.`,
+	);
+	if (process.env.PIHOLE_PASSWORD)
+		note("PIHOLE_PASSWORD is still set in this shell");
 }
 
 async function main() {
@@ -569,6 +598,8 @@ async function main() {
 			return cmdClients(cfg);
 		case "setup":
 			return cmdSetup(cfg);
+		case "logout":
+			return cmdLogout();
 		default:
 			return cmdScan(cmd, opts, cfg);
 	}

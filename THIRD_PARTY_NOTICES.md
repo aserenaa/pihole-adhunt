@@ -12,6 +12,7 @@ installed by your package manager, and filter lists are downloaded when adhunt r
 | `@ghostery/trackerdb` | CC BY-NC-SA 4.0 | https://github.com/ghostery/trackerdb |
 | `playwright-core` | Apache-2.0 | https://github.com/microsoft/playwright |
 | `tldts` | MIT (includes Public Suffix List data, MPL-2.0) | https://github.com/remusao/tldts |
+| `@napi-rs/keyring` | MIT | https://github.com/Brooooooklyn/keyring-node |
 | `@biomejs/biome` (development only) | MIT OR Apache-2.0 | https://github.com/biomejs/biome |
 
 ### Ghostery TrackerDB

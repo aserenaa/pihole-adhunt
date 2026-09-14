@@ -49,10 +49,12 @@ async function launch(headed, log) {
 	// Installed Chrome first (less likely to be flagged as a bot), then Edge, then Playwright's Chromium.
 	let last;
 	for (const channel of ["chrome", "msedge", undefined]) {
+		const { PIHOLE_PASSWORD, ...env } = process.env;
 		const options = {
 			channel,
 			headless: !headed,
 			args: ["--disable-blink-features=AutomationControlled"],
+			env, // the browser has no business with the Pi-hole password
 		};
 		try {
 			// Scanned pages run ad scripts: keep Chromium's sandbox on (Playwright disables it by default).

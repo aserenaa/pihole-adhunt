@@ -17,6 +17,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,13 +33,15 @@ jobs:
   test:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node: [20, 22, 24]
     env:
-      # Ghostery's prebuilt engine is downloaded once per lockfile and reused between runs.
+      # The filter engine built from the downloaded lists is cached for the day, so a run
+      # downloads the lists at most once per day and OS.
       ADHUNT_TEST_CACHE: ${{ github.workspace }}/.cache/engine
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,10 +52,13 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      - id: today
+        shell: bash
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/engine
-          key: ghostery-engine-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ghostery-engine-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ steps.today.outputs.date }}
       - run: pnpm install --frozen-lockfile
       # GitHub-hosted runners ship Google Chrome, which the capture smoke test uses.
       - run: pnpm test

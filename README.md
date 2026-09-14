@@ -162,7 +162,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 - adhunt talks to your Pi-hole, to the page you scan (and whatever that page loads), and to GitHub to refresh the filter lists every few days. Nothing else.
 - The app password lives in the **macOS Keychain** or the `PIHOLE_PASSWORD` environment variable; adhunt never writes it to disk.
 - Local state (config, last scan, undo history, filter cache) lives in `~/.config/adhunt/`, or in `ADHUNT_HOME` if set.
-- **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
+- **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
 - **HAR files contain cookies and session tokens.** Never share them or attach them to issues.
 
 ## Configuration

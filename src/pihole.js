@@ -1,5 +1,5 @@
 import { lookup, Resolver } from "node:dns/promises";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 
 // Pi-hole v6 query log statuses that mean "already blocked".
 const BLOCKED_STATUS =
@@ -13,6 +13,38 @@ export const fromWildcard = (regex) => {
 	const m = /^\(\\\.\|\^\)(.+)\$$/.exec(regex);
 	return m ? m[1].replace(/\\(.)/g, "$1") : null;
 };
+
+// Networks where plain HTTP is acceptable: loopback, private LANs, link-local and CGNAT
+// (100.64.0.0/10, also used by Tailscale, whose traffic is already encrypted).
+const LOCAL_NETWORKS = new BlockList();
+for (const [net, prefix] of [
+	["127.0.0.0", 8],
+	["10.0.0.0", 8],
+	["172.16.0.0", 12],
+	["192.168.0.0", 16],
+	["169.254.0.0", 16],
+	["100.64.0.0", 10],
+])
+	LOCAL_NETWORKS.addSubnet(net, prefix, "ipv4");
+for (const [net, prefix] of [
+	["::1", 128],
+	["fc00::", 7],
+	["fe80::", 10],
+])
+	LOCAL_NETWORKS.addSubnet(net, prefix, "ipv6");
+const LOCAL_HOSTNAMES =
+	/^(localhost|pi\.hole|[^.]+)$|\.(local|lan|internal|home\.arpa|ts\.net)$/i;
+
+/** true if the URL would send the password unencrypted beyond the local network. */
+export function isInsecureRemoteUrl(url) {
+	const { protocol, hostname } = new URL(url);
+	if (protocol !== "http:") return false;
+	const host = hostname.replace(/^\[|\]$/g, "");
+	const family = isIP(host);
+	if (family)
+		return !LOCAL_NETWORKS.check(host, family === 6 ? "ipv6" : "ipv4");
+	return !LOCAL_HOSTNAMES.test(host);
+}
 
 export class PiHole {
 	constructor({ url, password }) {

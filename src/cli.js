@@ -15,6 +15,7 @@ import {
 import {
 	fromWildcard,
 	isBlockedStatus,
+	isInsecureRemoteUrl,
 	makeDnsChecker,
 	toWildcard,
 	withPiHole,
@@ -33,6 +34,7 @@ const c = (style, text) =>
 	tty ? styleText(style, String(text)) : String(text);
 const say = (...a) => console.log(...a);
 const note = (msg) => process.stderr.write(c("dim", `  · ${msg}\n`));
+const warn = (msg) => process.stderr.write(c("yellow", `  ! ${msg}\n`));
 
 const HELP = `adhunt — find the ad domains a page loads and block them in Pi-hole
 
@@ -171,6 +173,19 @@ async function requirePassword() {
 	return pw;
 }
 
+let transportWarned = false;
+
+/** withPiHole(), warning once when the password would travel unencrypted. */
+function session(cfg, password, fn) {
+	if (!transportWarned && isInsecureRemoteUrl(cfg.piholeUrl)) {
+		transportWarned = true;
+		warn(
+			`${cfg.piholeUrl} uses plain HTTP outside your local network: the password travels unencrypted. Use HTTPS (see "Privacy & security" in the README).`,
+		);
+	}
+	return withPiHole(cfg, password, fn);
+}
+
 /** DNS checker that reads answers according to Pi-hole's blocking mode (see PiHole#blocking). */
 function blockingChecker(cfg, blocking) {
 	if (!blocking.active)
@@ -192,7 +207,7 @@ async function applyBlock(scan, selected, cfg) {
 		items: [],
 	};
 	say("");
-	const blocking = await withPiHole(cfg, password, async (ph) => {
+	const blocking = await session(cfg, password, async (ph) => {
 		for (const cand of selected) {
 			const domain =
 				cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
@@ -269,7 +284,7 @@ async function cmdScan(url, opts, cfg) {
 	let blocking;
 	if (password) {
 		note("classifying and querying Pi-hole's DNS…");
-		blocking = await withPiHole(cfg, password, (ph) => ph.blocking());
+		blocking = await session(cfg, password, (ph) => ph.blocking());
 		const dns = await blockingChecker(cfg, blocking);
 		dnsStatus = await dns.many(result.candidates.flatMap((x) => x.hosts));
 	} else {
@@ -345,7 +360,7 @@ async function cmdUndo(cfg) {
 	const batch = history.pop();
 	if (!batch) return say("No adhunt blocks to undo.");
 	requireUrl(cfg);
-	await withPiHole(cfg, await requirePassword(), async (ph) => {
+	await session(cfg, await requirePassword(), async (ph) => {
 		for (const item of batch.items) {
 			const removed = await ph.removeDeny(item.kind, item.domain);
 			say(
@@ -364,7 +379,7 @@ async function cmdUndo(cfg) {
 
 async function cmdList(cfg) {
 	requireUrl(cfg);
-	const entries = await withPiHole(cfg, await requirePassword(), (ph) =>
+	const entries = await session(cfg, await requirePassword(), (ph) =>
 		ph.listDeny(),
 	);
 	const mine = entries.filter((e) => e.comment?.startsWith("adhunt"));
@@ -389,7 +404,7 @@ async function cmdList(cfg) {
 async function cmdRemove(target, cfg) {
 	if (!target) throw new Error("Usage: adhunt remove <domain>");
 	requireUrl(cfg);
-	const removed = await withPiHole(cfg, await requirePassword(), async (ph) => {
+	const removed = await session(cfg, await requirePassword(), async (ph) => {
 		const entries = (await ph.listDeny()).filter((e) =>
 			e.comment?.startsWith("adhunt"),
 		);
@@ -413,7 +428,7 @@ async function cmdRemove(target, cfg) {
 
 async function cmdClients(cfg) {
 	requireUrl(cfg);
-	const clients = await withPiHole(cfg, await requirePassword(), (ph) =>
+	const clients = await session(cfg, await requirePassword(), (ph) =>
 		ph.topClients(20),
 	);
 	say(c("bold", "Devices with the most queries (since Pi-hole last started):"));
@@ -437,7 +452,7 @@ async function cmdDevice(ip, opts, cfg) {
 	requireUrl(cfg);
 	const minutes = Number(opts.minutes || 15);
 	const until = Math.floor(Date.now() / 1000);
-	const [queries, blocking] = await withPiHole(
+	const [queries, blocking] = await session(
 		cfg,
 		await requirePassword(),
 		(ph) =>
@@ -517,7 +532,7 @@ async function cmdSetup(cfg) {
 		return;
 	}
 	const password = await requirePassword();
-	const [denied, blocking] = await withPiHole(cfg, password, (ph) =>
+	const [denied, blocking] = await session(cfg, password, (ph) =>
 		Promise.all([ph.listDeny(), ph.blocking()]),
 	);
 	const dns = await blockingChecker(cfg, blocking);

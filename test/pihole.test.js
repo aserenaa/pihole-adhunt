@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
 
-import { dnsAnswerStatus, PiHole } from "../src/pihole.js";
+import { dnsAnswerStatus, isInsecureRemoteUrl, PiHole } from "../src/pihole.js";
 
 /** Runs fn against a local HTTP server that answers every request with handler(req, res). */
 async function withServer(handler, fn) {
@@ -103,4 +103,33 @@ test("login: v6 session and wrong password", async () => {
 			);
 		},
 	);
+});
+
+test("plain HTTP is only flagged outside the local network", () => {
+	for (const url of [
+		"http://pi.hole",
+		"http://localhost:8080",
+		"http://127.0.0.1",
+		"http://192.168.1.2/admin",
+		"http://10.0.0.5",
+		"http://172.20.1.1",
+		"http://100.100.1.1",
+		"http://[::1]",
+		"http://[fd12:3456::1]",
+		"http://pihole",
+		"http://pihole.local",
+		"http://pihole.home.arpa",
+		"http://pihole.example.ts.net",
+		"https://pihole.example.com",
+		"https://203.0.113.10",
+	])
+		assert.equal(isInsecureRemoteUrl(url), false, url);
+	for (const url of [
+		"http://pihole.example.com",
+		"http://203.0.113.10",
+		"http://172.32.0.1",
+		"http://100.128.0.1",
+		"http://[2001:db8::1]",
+	])
+		assert.equal(isInsecureRemoteUrl(url), true, url);
 });

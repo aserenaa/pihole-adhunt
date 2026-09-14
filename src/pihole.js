@@ -225,16 +225,36 @@ export function dnsAnswerStatus(
 	return "error";
 }
 
+/** "192.0.2.53", "192.0.2.53:1053", "[2001:db8::53]:1053" or "pi.hole" → { host, port }. */
+export function parseDnsServer(value) {
+	const bracketed = /^\[(.+)\](?::(\d+))?$/.exec(value);
+	if (bracketed)
+		return { host: bracketed[1], port: Number(bracketed[2] || 53) };
+	const hostPort = /^([^:]+):(\d+)$/.exec(value);
+	if (hostPort) return { host: hostPort[1], port: Number(hostPort[2]) };
+	return { host: value, port: 53 };
+}
+
 /**
  * Asks Pi-hole's DNS directly (not the system resolver) → 'blocked' | 'ok' | 'nx' | 'error'.
  * That way the result covers gravity, regex and CNAMEs even if this computer uses another DNS.
  * blocking: PiHole#blocking(), so answers are read according to the configured blocking mode.
  */
 export async function makeDnsChecker(cfg, blocking) {
-	let server = cfg.dnsServer || new URL(cfg.piholeUrl).hostname;
-	if (!isIP(server)) server = (await lookup(server, { family: 4 })).address;
+	const { host, port } = parseDnsServer(
+		cfg.dnsServer || new URL(cfg.piholeUrl).hostname,
+	);
+	const server = isIP(host)
+		? host
+		: (await lookup(host, { family: 4 })).address;
+	const address =
+		port === 53
+			? server
+			: isIP(server) === 6
+				? `[${server}]:${port}`
+				: `${server}:${port}`;
 	const resolver = new Resolver({ timeout: 2500, tries: 2 });
-	resolver.setServers([server]);
+	resolver.setServers([address]);
 	const cache = new Map();
 	const check = async (host) => {
 		try {
@@ -263,6 +283,6 @@ export async function makeDnsChecker(cfg, blocking) {
 		);
 		return out;
 	};
-	one.server = server;
+	one.server = address;
 	return one;
 }

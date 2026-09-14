@@ -194,7 +194,7 @@ See [SECURITY.md](SECURITY.md) for what adhunt stores and how to report a vulner
 |---|---|
 | `PIHOLE_URL` | Pi-hole base URL (overrides `adhunt setup`) |
 | `PIHOLE_PASSWORD` | App password (overrides the keychain) |
-| `PIHOLE_DNS` | DNS server used for "already blocked" checks (defaults to the Pi-hole host) |
+| `PIHOLE_DNS` | DNS server used for "already blocked" checks, with an optional port (`192.0.2.53:1053`); defaults to the Pi-hole host |
 | `ADHUNT_HOME` | Custom directory for config, state and cache |
 | `NO_COLOR` | Disable colored output |
 

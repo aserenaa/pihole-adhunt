@@ -7,6 +7,7 @@ import {
 	findGroup,
 	isInsecureRemoteUrl,
 	PiHole,
+	parseDnsServer,
 } from "../src/pihole.js";
 
 /** Runs fn against a local HTTP server that answers every request with handler(req, res). */
@@ -150,4 +151,31 @@ test("groups are found by name or id", () => {
 		() => findGroup(groups, "guests"),
 		/no group "guests" \(groups: Default, Kids\)/,
 	);
+});
+
+test("DNS server with an optional port (e.g. Docker mapping 1053:53)", () => {
+	assert.deepEqual(parseDnsServer("192.0.2.53"), {
+		host: "192.0.2.53",
+		port: 53,
+	});
+	assert.deepEqual(parseDnsServer("192.0.2.53:1053"), {
+		host: "192.0.2.53",
+		port: 1053,
+	});
+	assert.deepEqual(parseDnsServer("pi.hole:1053"), {
+		host: "pi.hole",
+		port: 1053,
+	});
+	assert.deepEqual(parseDnsServer("[2001:db8::53]:1053"), {
+		host: "2001:db8::53",
+		port: 1053,
+	});
+	assert.deepEqual(parseDnsServer("[2001:db8::53]"), {
+		host: "2001:db8::53",
+		port: 53,
+	});
+	assert.deepEqual(parseDnsServer("2001:db8::53"), {
+		host: "2001:db8::53",
+		port: 53,
+	});
 });

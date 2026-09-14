@@ -157,3 +157,20 @@ test("desktop user agent follows the host OS and browser", () => {
 	);
 	assert.doesNotMatch(desktopUserAgent("140.0.1", "chrome"), /Headless/);
 });
+
+test("IP addresses are never proposed: Pi-hole only blocks names", () => {
+	const r = analyze(
+		{
+			requestedUrl: "https://news.example.com/",
+			finalUrl: "https://news.example.com/",
+			requests: [
+				{ url: "https://203.0.113.5/tag/js/gpt.js", type: "script" },
+				{ url: "https://[2001:db8::1]/ads.js", type: "script" },
+			],
+			popups: ["http://198.51.100.7/landing"],
+		},
+		engines,
+	);
+	assert.deepEqual(r.candidates, []);
+	assert.equal(r.hostCount, 0);
+});

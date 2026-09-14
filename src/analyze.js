@@ -1,5 +1,6 @@
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { isIP } from "node:net";
 import { dirname, join } from "node:path";
 
 import { FiltersEngine, Request } from "@ghostery/adblocker";
@@ -137,7 +138,8 @@ export function analyze(capture, { engine, tdb }) {
 	for (const r of capture.requests) {
 		if (!/^(https?|wss?):/.test(r.url)) continue;
 		const host = getHostname(r.url);
-		if (!host?.includes(".")) continue;
+		// Pi-hole blocks names: IP addresses and single-label hosts can't be blocked via DNS.
+		if (!host?.includes(".") || isIP(host)) continue;
 		const h = hostOf(host);
 		const weight = r.weight || 1;
 		h.count += weight;
@@ -168,7 +170,8 @@ export function analyze(capture, { engine, tdb }) {
 	}
 	for (const u of [...(capture.popups || []), ...(capture.redirects || [])]) {
 		const host = getHostname(u);
-		if (host && !siteDomains.has(getDomain(host))) hostOf(host).popup = true;
+		if (host?.includes(".") && !isIP(host) && !siteDomains.has(getDomain(host)))
+			hostOf(host).popup = true;
 	}
 
 	// ── Step 1: per-host decision ────────────────────────────────────────────────

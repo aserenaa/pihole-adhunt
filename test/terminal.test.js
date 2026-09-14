@@ -108,3 +108,10 @@ test("printable strips control characters but keeps text and emoji", () => {
 	);
 	assert.equal(printable(undefined), "");
 });
+
+test("prompt without a terminal fails when the input ends first", async () => {
+	const stdin = new PassThrough();
+	const answer = prompt("URL: ", { stdin, stdout: new PassThrough() });
+	stdin.end();
+	await assert.rejects(answer, /input ended/);
+});

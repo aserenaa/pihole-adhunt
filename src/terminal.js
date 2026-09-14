@@ -52,7 +52,15 @@ export async function prompt(
 			terminal: false,
 		});
 		try {
-			return await rl.question(question);
+			return await new Promise((resolve, reject) => {
+				// Without this, input that ends before a line would leave the question unanswered.
+				rl.once("close", () =>
+					reject(
+						new Error("No answer: the input ended before a line was read."),
+					),
+				);
+				rl.question(question).then(resolve, reject);
+			});
 		} finally {
 			rl.close();
 		}

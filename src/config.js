@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, win32 } from "node:path";
+import { dirname, join, win32 } from "node:path";
 
 /**
  * Where config, state and cache live: ADHUNT_HOME, else %APPDATA%\adhunt on Windows,
@@ -39,8 +39,17 @@ export async function loadConfig() {
 	return cfg;
 }
 
+/**
+ * Writes a JSON file readable only by the current user: scans and history describe the user's
+ * browsing and devices. chmod also tightens files created by older versions.
+ */
+export async function writePrivateJson(path, data) {
+	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+	await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+	await chmod(path, 0o600);
+}
+
 export async function saveConfig(cfg) {
-	await mkdir(CONFIG_DIR, { recursive: true });
-	await writeFile(CONFIG_FILE, `${JSON.stringify(cfg, null, 2)}\n`);
+	await writePrivateJson(CONFIG_FILE, cfg);
 	return CONFIG_FILE;
 }

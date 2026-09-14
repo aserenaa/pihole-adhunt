@@ -22,8 +22,8 @@ supported version.
 | Compiled filter lists | `cache/ghostery-ads-tracking.bin` |
 
 The config directory is `~/.config/adhunt/` on macOS and Linux (or `$XDG_CONFIG_HOME/adhunt`),
-`%APPDATA%\adhunt\` on Windows, or `ADHUNT_HOME`. Treat its `state/` files as private: they
-describe your browsing and your devices.
+`%APPDATA%\adhunt\` on Windows, or `ADHUNT_HOME`. Its `state/` files describe your browsing and your
+devices, so on macOS and Linux adhunt writes them readable only by you (`0600`, in `0700` folders).
 
 ## Threat model notes
 

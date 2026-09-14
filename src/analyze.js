@@ -35,7 +35,7 @@ export async function loadEngines(
 	cacheDir,
 	{ fetch: fetchImpl = fetch, log = () => {} } = {},
 ) {
-	await mkdir(cacheDir, { recursive: true });
+	await mkdir(cacheDir, { recursive: true, mode: 0o700 });
 	const path = join(cacheDir, "ghostery-ads-tracking.bin");
 	const age = await stat(path).then(
 		(s) => Date.now() - s.mtimeMs,

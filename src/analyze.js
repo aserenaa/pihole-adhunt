@@ -77,8 +77,9 @@ export async function loadEngines(
 
 /**
  * If the rule blocks a whole domain (`||domain^`, no path and no `$domain=`), returns that
- * domain: it is exactly equivalent to a Pi-hole wildcard. Rules with a path (`||site.com/ads/`)
- * can't be translated to DNS without blocking the whole site → null.
+ * domain, which a Pi-hole wildcard can block. DNS can't see request types or who loads them, so
+ * the wildcard is broader than a rule limited by `$script` or `$3p`. Rules with a path
+ * (`||site.com/ads/`) can't be translated to DNS without blocking the whole site → null.
  */
 export function hostLevelTarget(filter) {
 	if (
@@ -290,34 +291,37 @@ export function analyze(capture, { engine, tdb }) {
 		}
 	}
 
-	// ── Candidates grouped by what would be blocked in Pi-hole ──────────────────
-	const candidates = new Map();
+	// ── Candidates: hosts grouped by what would be blocked in Pi-hole ──────────
+	const byKey = new Map();
 	for (const h of hosts.values()) {
-		const d = h.decision;
-		if (!d.key) continue;
-		let c = candidates.get(d.key);
-		if (!c) {
-			c = {
-				target: d.key,
-				kind: d.kind,
-				group: d.group,
-				preselected: !!d.preselected,
-				label: d.label || "",
-				reasons: [],
-				hosts: [],
-				requests: 0,
-			};
-			candidates.set(d.key, c);
-		} else {
-			// If any host in the group is risky, the whole group drops to "review".
-			if (GROUP_ORDER[d.group] > GROUP_ORDER[c.group]) c.group = d.group;
-			c.preselected = c.preselected && !!d.preselected;
-		}
-		if (d.reason && !c.reasons.includes(d.reason)) c.reasons.push(d.reason);
-		if (!c.label && d.label) c.label = d.label;
-		c.hosts.push(h.host);
-		c.requests += h.count;
+		if (!h.decision.key) continue;
+		if (!byKey.has(h.decision.key)) byKey.set(h.decision.key, []);
+		byKey.get(h.decision.key).push(h);
 	}
+	const candidates = [...byKey].map(([target, members]) => {
+		const decisions = members.map((h) => h.decision);
+		const kind = decisions.some((d) => d.kind === "regex") ? "regex" : "exact";
+		// A wildcard also covers hosts that matched no rule, so they don't weaken it; any risky
+		// host still drops the whole candidate to "review".
+		const deciding =
+			kind === "regex"
+				? decisions.filter((d) => d.group !== "unknown")
+				: decisions;
+		return {
+			target,
+			kind,
+			group: deciding.reduce(
+				(group, d) =>
+					GROUP_ORDER[d.group] > GROUP_ORDER[group] ? d.group : group,
+				"block",
+			),
+			preselected: deciding.every((d) => d.preselected),
+			label: decisions.find((d) => d.label)?.label || "",
+			reasons: [...new Set(decisions.map((d) => d.reason).filter(Boolean))],
+			hosts: members.map((h) => h.host),
+			requests: members.reduce((n, h) => n + h.count, 0),
+		};
+	});
 
 	const list = (group) =>
 		[...hosts.values()]
@@ -332,7 +336,7 @@ export function analyze(capture, { engine, tdb }) {
 		browser: capture.browser || "",
 		requestCount: capture.requests.reduce((n, r) => n + (r.weight || 1), 0),
 		hostCount: hosts.size,
-		candidates: [...candidates.values()],
+		candidates,
 		safe: list("safe"),
 		firstParty: list("firstParty"),
 		pathOnly: [...hosts.values()]

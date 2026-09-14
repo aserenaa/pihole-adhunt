@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { NetworkFilter } from "@ghostery/adblocker";
+import { FiltersEngine, NetworkFilter } from "@ghostery/adblocker";
 
 import {
 	analyze,
@@ -205,4 +205,35 @@ test("filter list downloads: HTTP errors fail, and an old engine is the fallback
 		warnings[0],
 		/could not refresh the filter lists .*5 day\(s\) ago/,
 	);
+});
+
+test("a wildcard absorbs hosts of the same domain that matched no rule, in any order", () => {
+	const engine = FiltersEngine.parse("||tracker.example^$script");
+	const pixel = { url: "https://tracker.example/pixel.gif", type: "image" };
+	const script = { url: "https://cdn.tracker.example/t.js", type: "script" };
+	for (const requests of [
+		[pixel, script],
+		[script, pixel],
+	]) {
+		const r = analyze(
+			{
+				requestedUrl: "https://news.example/",
+				finalUrl: "https://news.example/",
+				requests: requests.map((q) => ({
+					...q,
+					sourceUrl: "https://news.example/",
+				})),
+			},
+			{ engine, tdb: engines.tdb },
+		);
+		assert.equal(r.candidates.length, 1);
+		const [c] = r.candidates;
+		assert.equal(c.kind, "regex");
+		assert.equal(c.group, "block");
+		assert.equal(c.preselected, true);
+		assert.deepEqual(c.hosts.sort(), [
+			"cdn.tracker.example",
+			"tracker.example",
+		]);
+	}
 });

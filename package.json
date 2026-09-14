@@ -1,6 +1,6 @@
 {
 	"name": "pihole-adhunt",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "Find the ad and tracker domains a web page loads and block them in Pi-hole",
 	"keywords": [
 		"pi-hole",

@@ -1,9 +1,14 @@
 # Changelog
 
 All notable changes to this project are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-09-14
+
+First public release.
 
 ### Added
 
@@ -33,4 +38,5 @@ All notable changes to this project are documented here. The format follows
 - Config and state files are readable only by the current user on macOS and Linux.
 - Filter list downloads that fail or return an HTTP error are rejected instead of cached.
 
-[Unreleased]: https://github.com/aserenaa/pihole-adhunt/commits/main
+[Unreleased]: https://github.com/aserenaa/pihole-adhunt/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/aserenaa/pihole-adhunt/releases/tag/v1.0.0

@@ -45,16 +45,31 @@ export function desktopUserAgent(
 	return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36${edge}`;
 }
 
-async function launch(headed) {
+async function launch(headed, log) {
 	// Installed Chrome first (less likely to be flagged as a bot), then Edge, then Playwright's Chromium.
 	let last;
 	for (const channel of ["chrome", "msedge", undefined]) {
+		const options = {
+			channel,
+			headless: !headed,
+			args: ["--disable-blink-features=AutomationControlled"],
+		};
 		try {
+			// Scanned pages run ad scripts: keep Chromium's sandbox on (Playwright disables it by default).
 			const browser = await chromium.launch({
-				channel,
-				headless: !headed,
-				args: ["--disable-blink-features=AutomationControlled"],
+				...options,
+				chromiumSandbox: true,
 			});
+			return { browser, channel };
+		} catch (e) {
+			last = e;
+			if (!/sandbox/i.test(e.message)) continue;
+		}
+		try {
+			const browser = await chromium.launch(options);
+			log(
+				"warning: Chromium's sandbox is not available here, running without it",
+			);
 			return { browser, channel };
 		} catch (e) {
 			last = e;
@@ -104,7 +119,7 @@ export async function capture(
 		log = () => {},
 	} = {},
 ) {
-	const { browser, channel } = await launch(headed);
+	const { browser, channel } = await launch(headed, log);
 	const out = {
 		requestedUrl: url,
 		finalUrl: url,

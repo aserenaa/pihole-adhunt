@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
 
-import { dnsAnswerStatus, isInsecureRemoteUrl, PiHole } from "../src/pihole.js";
+import {
+	dnsAnswerStatus,
+	findGroup,
+	isInsecureRemoteUrl,
+	PiHole,
+} from "../src/pihole.js";
 
 /** Runs fn against a local HTTP server that answers every request with handler(req, res). */
 async function withServer(handler, fn) {
@@ -132,4 +137,17 @@ test("plain HTTP is only flagged outside the local network", () => {
 		"http://[2001:db8::1]",
 	])
 		assert.equal(isInsecureRemoteUrl(url), true, url);
+});
+
+test("groups are found by name or id", () => {
+	const groups = [
+		{ id: 0, name: "Default" },
+		{ id: 3, name: "Kids" },
+	];
+	assert.equal(findGroup(groups, "kids").id, 3);
+	assert.equal(findGroup(groups, "0").name, "Default");
+	assert.throws(
+		() => findGroup(groups, "guests"),
+		/no group "guests" \(groups: Default, Kids\)/,
+	);
 });

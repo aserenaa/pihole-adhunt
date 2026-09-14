@@ -112,12 +112,12 @@ export class PiHole {
 		this.sid = null;
 	}
 
-	/** kind: 'exact' | 'regex'. Returns { ok, exists, error }. */
-	async addDeny(kind, domain, comment) {
+	/** kind: 'exact' | 'regex'; groups: Pi-hole group ids. Returns { ok, exists, error }. */
+	async addDeny(kind, domain, comment, groups = [0]) {
 		const data = await this.request("POST", `/api/domains/deny/${kind}`, {
 			domain: [domain],
 			comment,
-			groups: [0],
+			groups,
 			enabled: true,
 		});
 		const error = data?.processed?.errors?.[0]?.error;
@@ -136,6 +136,10 @@ export class PiHole {
 			if (e.status === 404) return false;
 			throw e;
 		}
+	}
+
+	async groups() {
+		return (await this.request("GET", "/api/groups")).groups || [];
 	}
 
 	async listDeny() {
@@ -173,6 +177,19 @@ export class PiHole {
 				.clients || []
 		);
 	}
+}
+
+/** A Pi-hole group by name (case-insensitive) or numeric id → { id, name }. */
+export function findGroup(groups, wanted) {
+	const hit = groups.find(
+		(g) =>
+			String(g.id) === wanted || g.name.toLowerCase() === wanted.toLowerCase(),
+	);
+	if (!hit)
+		throw new Error(
+			`Pi-hole has no group "${wanted}" (groups: ${groups.map((g) => g.name).join(", ")}).`,
+		);
+	return hit;
 }
 
 export async function withPiHole(cfg, password, fn) {

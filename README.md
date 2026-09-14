@@ -133,6 +133,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | `--headed` | Show the browser window |
 | `--har <file>` | Analyze a HAR file instead of opening a browser (works without a Pi-hole) |
 | `-y, --yes` | Block the recommended entries without asking |
+| `-g, --group <g>` | Add blocked domains to this Pi-hole group, by name or id (default: `Default`) |
 | `--json` | Print the analysis as JSON |
 | `--minutes <n>` | Device mode: minutes of query log to analyze (default `15`, max `1440`) |
 

@@ -14,6 +14,7 @@ import {
 } from "./config.js";
 import { pageUrl, parseSelection, wholeNumber } from "./options.js";
 import {
+	findGroup,
 	fromWildcard,
 	isBlockedStatus,
 	isInsecureRemoteUrl,
@@ -58,6 +59,7 @@ Scan options:
       --har <file>  analyze a .har exported from DevTools instead of opening a browser
   -y, --yes         block the recommended entries without asking
       --json        print the result as JSON
+  -g, --group <g>   add blocked domains to this Pi-hole group, by name or id (default: Default)
 `;
 
 const GROUPS = {
@@ -174,7 +176,7 @@ function blockingChecker(cfg, blocking) {
 	return makeDnsChecker(cfg, blocking);
 }
 
-async function applyBlock(scan, selected, cfg) {
+async function applyBlock(scan, selected, cfg, opts) {
 	if (!selected.length) return say("Nothing selected.");
 	requireUrl(cfg);
 	const password = await requirePassword();
@@ -187,13 +189,17 @@ async function applyBlock(scan, selected, cfg) {
 	};
 	say("");
 	const blocking = await session(cfg, password, async (ph) => {
+		const group = opts.group && findGroup(await ph.groups(), opts.group);
+		if (group) say(c("dim", `  group: ${group.name}`));
 		for (const cand of selected) {
 			const domain =
 				cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
 			const comment = ["adhunt", scan.site, date, cand.label]
 				.filter(Boolean)
 				.join(" · ");
-			const res = await ph.addDeny(cand.kind, domain, comment);
+			const res = await ph.addDeny(cand.kind, domain, comment, [
+				group ? group.id : 0,
+			]);
 			if (res.ok) {
 				batch.items.push({
 					kind: cand.kind,
@@ -285,7 +291,7 @@ async function review(scan, opts, cfg) {
 	printReport(scan);
 	if (!scan.candidates.length) return;
 	const rec = scan.candidates.filter((x) => x.preselected);
-	if (opts.yes) return applyBlock(scan, rec, cfg);
+	if (opts.yes) return applyBlock(scan, rec, cfg, opts);
 	if (!cfg.piholeUrl)
 		return say(
 			c(
@@ -318,10 +324,10 @@ async function review(scan, opts, cfg) {
 	} finally {
 		rl.close();
 	}
-	await applyBlock(scan, selected, cfg);
+	await applyBlock(scan, selected, cfg, opts);
 }
 
-async function cmdBlock(tokens, cfg) {
+async function cmdBlock(tokens, opts, cfg) {
 	const scan = await loadLastScan();
 	if (!scan) throw new Error("No previous scan. Run this first: adhunt <url>");
 	if (!tokens.length)
@@ -332,7 +338,7 @@ async function cmdBlock(tokens, cfg) {
 	say(
 		c("dim", `Last scan: ${scan.site} (${new Date(scan.at).toLocaleString()})`),
 	);
-	await applyBlock(scan, selected, cfg);
+	await applyBlock(scan, selected, cfg, opts);
 }
 
 async function cmdUndo(cfg) {
@@ -539,6 +545,7 @@ async function main() {
 			yes: { type: "boolean", short: "y" },
 			json: { type: "boolean" },
 			minutes: { type: "string" },
+			group: { type: "string", short: "g" },
 			help: { type: "boolean", short: "h" },
 		},
 	});
@@ -549,7 +556,7 @@ async function main() {
 		case "scan":
 			return cmdScan(args[0], opts, cfg);
 		case "block":
-			return cmdBlock(args, cfg);
+			return cmdBlock(args, opts, cfg);
 		case "undo":
 			return cmdUndo(cfg);
 		case "list":

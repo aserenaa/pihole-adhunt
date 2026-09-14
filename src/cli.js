@@ -37,6 +37,9 @@ import {
 } from "./state.js";
 import { exitWhenFlushed, printable, prompt } from "./terminal.js";
 
+// Entries adhunt added: "adhunt · <site> · <date> · <label>", or just "adhunt".
+const isAdhuntEntry = (entry) => /^adhunt( · |$)/.test(entry.comment || "");
+
 const LOCAL_NAMES = /\.(lan|local|localdomain|home|internal|arpa|ts\.net)$/;
 
 const tty = process.stdout.isTTY;
@@ -415,7 +418,7 @@ async function cmdList(cfg) {
 	const entries = await session(cfg, await requirePassword(), (ph) =>
 		ph.listDeny(),
 	);
-	const mine = entries.filter((e) => e.comment?.startsWith("adhunt"));
+	const mine = entries.filter(isAdhuntEntry);
 	if (!mine.length) return say("adhunt hasn't added anything to Pi-hole yet.");
 	for (const e of mine.sort((a, b) => a.date_added - b.date_added)) {
 		const target =
@@ -438,9 +441,7 @@ async function cmdRemove(target, cfg) {
 	if (!target) throw new Error("Usage: adhunt remove <domain>");
 	requireUrl(cfg);
 	const removed = await session(cfg, await requirePassword(), async (ph) => {
-		const entries = (await ph.listDeny()).filter((e) =>
-			e.comment?.startsWith("adhunt"),
-		);
+		const entries = (await ph.listDeny()).filter(isAdhuntEntry);
 		const hit = entries.find(
 			(e) => e.domain === target || fromWildcard(e.domain) === target,
 		);

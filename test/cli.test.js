@@ -173,9 +173,19 @@ test("block, list, remove and undo against Pi-hole", async (t) => {
 	);
 	assert.equal((await history()).at(-1).items.length, 6);
 
+	// An entry someone else added, whose comment merely starts with "adhunt", is left alone.
+	pihole.deny.push({
+		kind: "exact",
+		domain: "mine.example",
+		comment: "adhunter's list",
+		enabled: true,
+	});
 	const list = await adhunt("list");
 	assert.match(list.stdout, /taboola\.com \(\+subdomains\)/);
 	assert.match(list.stdout, /6 entries/);
+	assert.doesNotMatch(list.stdout, /mine\.example/);
+	assert.equal((await adhunt("remove", "mine.example")).code, 1);
+	pihole.deny.pop();
 
 	assert.equal((await adhunt("remove", "taboola.com")).code, 0);
 	assert.equal(pihole.deny.length, 5);

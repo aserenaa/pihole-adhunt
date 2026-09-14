@@ -186,6 +186,8 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 - **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
 - **HAR files contain cookies and session tokens.** Never share them or attach them to issues.
 
+See [SECURITY.md](SECURITY.md) for what adhunt stores and how to report a vulnerability.
+
 ## Configuration
 
 | Variable | Purpose |
@@ -242,7 +244,7 @@ pnpm test          # node:test; the capture test is skipped when no Chrome, Edge
 pnpm lint          # Biome
 ```
 
-The safe list lives in [`src/safe.js`](src/safe.js). Pull requests that add domains should explain what breaks when they're blocked.
+The safe list lives in [`src/safe.js`](src/safe.js). Pull requests that add domains should explain what breaks when they're blocked. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgements
 

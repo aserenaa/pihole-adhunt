@@ -98,7 +98,7 @@ export class PiHole {
 		}).catch((e) => {
 			if (e.status === 401)
 				throw new Error(
-					"Pi-hole rejected the password (use the app password: Settings → Web interface / API).",
+					"Pi-hole rejected the password (use the app password: Settings → Web interface / API → Advanced settings).",
 				);
 			if (e.status === 404 || e.status === 405) throw v6Required;
 			throw e;

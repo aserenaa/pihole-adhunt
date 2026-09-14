@@ -529,7 +529,7 @@ async function cmdSetup(cfg) {
 		note("using PIHOLE_PASSWORD (nothing is stored)");
 	} else {
 		say(
-			"Pi-hole app password (Settings → Web interface / API → Configure app password).",
+			"Pi-hole app password (Settings → Web interface / API → Advanced settings → Configure app password).",
 		);
 		password =
 			(await prompt(

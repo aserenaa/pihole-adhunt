@@ -12,6 +12,7 @@ import {
 	saveConfig,
 	storePassword,
 } from "./config.js";
+import { pageUrl, parseSelection, wholeNumber } from "./options.js";
 import {
 	fromWildcard,
 	isBlockedStatus,
@@ -51,7 +52,7 @@ Usage:
 
 Scan options:
   -m, --mobile      emulate an iPhone (sites serve different ads on mobile)
-  -w, --wait <s>    seconds to scroll while waiting for ads (default 20)
+  -w, --wait <s>    seconds to scroll while waiting for ads (default 20, max 300)
       --click       click the page to detect pop-ups/pop-unders
       --headed      show the browser (useful when a site detects bots)
       --har <file>  analyze a .har exported from DevTools instead of opening a browser
@@ -135,28 +136,6 @@ function printReport(scan) {
 	if (scan.dead?.length)
 		say(c("dim", `⚫ Not resolving (dead domains): ${short(scan.dead, 4)}`));
 	if (!scan.candidates.length) say(c("green", "Nothing new to block 🎉"));
-}
-
-/** "r 3 5-7" → candidates. r = recommended. */
-function parseSelection(tokens, scan) {
-	const picked = new Map();
-	for (const tok of tokens.flatMap((t) => t.split(/[\s,]+/)).filter(Boolean)) {
-		if (/^(r|rec|recommended|y|yes)$/i.test(tok)) {
-			for (const x of scan.candidates) if (x.preselected) picked.set(x.n, x);
-		} else if (/^\d+(-\d+)?$/.test(tok)) {
-			const [a, b = a] = tok.split("-").map(Number);
-			for (let n = a; n <= b; n++) {
-				const cand = scan.candidates.find((x) => x.n === n);
-				if (!cand) throw new Error(`There is no number ${n} in the last scan.`);
-				picked.set(n, cand);
-			}
-		} else if (!/^(n|no|none)$/i.test(tok)) {
-			throw new Error(
-				`Didn't understand "${tok}". Use r, numbers (1 3 5-7) or n.`,
-			);
-		}
-	}
-	return [...picked.values()];
 }
 
 function requireUrl(cfg) {
@@ -257,10 +236,11 @@ async function applyBlock(scan, selected, cfg) {
 
 async function cmdScan(url, opts, cfg) {
 	let password = null;
+	const wait = wholeNumber(opts.wait, "--wait", { fallback: 20, max: 300 });
 	if (!opts.har) {
 		if (!url)
 			throw new Error("Missing the URL. Example: adhunt https://example.com");
-		if (!/^https?:\/\//.test(url)) url = `https://${url}`;
+		url = pageUrl(url);
 		requireUrl(cfg);
 		password = await requirePassword();
 	} else if (cfg.piholeUrl) {
@@ -272,7 +252,7 @@ async function cmdScan(url, opts, cfg) {
 		? await fromHar(opts.har)
 		: await capture(url, {
 				mobile: opts.mobile,
-				wait: Number(opts.wait || 20),
+				wait,
 				click: opts.click,
 				headed: opts.headed,
 				log: note,
@@ -449,8 +429,11 @@ async function cmdDevice(ip, opts, cfg) {
 		throw new Error(
 			"Usage: adhunt device <ip> [--minutes 15]   (list IPs with: adhunt clients)",
 		);
+	const minutes = wholeNumber(opts.minutes, "--minutes", {
+		fallback: 15,
+		max: 1440,
+	});
 	requireUrl(cfg);
-	const minutes = Number(opts.minutes || 15);
 	const until = Math.floor(Date.now() / 1000);
 	const [queries, blocking] = await session(
 		cfg,

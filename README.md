@@ -128,12 +128,13 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | Option | Description |
 |---|---|
 | `-m, --mobile` | Emulate an iPhone |
-| `-w, --wait <s>` | Seconds to scroll while waiting for ads (default `20`) |
+| `-w, --wait <s>` | Seconds to scroll while waiting for ads (default `20`, max `300`) |
 | `--click` | Click the page to trigger pop-ups |
 | `--headed` | Show the browser window |
 | `--har <file>` | Analyze a HAR file instead of opening a browser (works without a Pi-hole) |
 | `-y, --yes` | Block the recommended entries without asking |
 | `--json` | Print the analysis as JSON |
+| `--minutes <n>` | Device mode: minutes of query log to analyze (default `15`, max `1440`) |
 
 > [!TIP]
 > **Device mode:** use the app or site on the device for a minute, then run `adhunt device <ip> --minutes 5`.

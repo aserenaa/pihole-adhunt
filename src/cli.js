@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { isIP } from "node:net";
 import { parseArgs, styleText } from "node:util";
 
@@ -64,6 +65,7 @@ Usage:
   adhunt clients                     devices with the most queries (to find an IP)
   adhunt setup                       set the Pi-hole URL and store the password in the system keychain
   adhunt logout                      remove the stored password
+  adhunt --version                   print the version
 
 Scan options:
   -m, --mobile      emulate an iPhone (sites serve different ads on mobile)
@@ -620,9 +622,12 @@ async function main() {
 			group: { type: "string", short: "g" },
 			"no-menu": { type: "boolean" },
 			help: { type: "boolean", short: "h" },
+			version: { type: "boolean", short: "v" },
 		},
 	});
 	const [cmd, ...args] = positionals;
+	if (opts.version)
+		return say(createRequire(import.meta.url)("../package.json").version);
 	if (opts.help || (!cmd && !opts.har)) return say(HELP);
 	const cfg = await loadConfig();
 	switch (cmd) {

@@ -171,6 +171,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | `--json` | Print the analysis as JSON |
 | `--no-menu` | Type the selection (`r`, `1 3 5-7`) instead of using the menu |
 | `--minutes <n>` | Device mode: minutes of query log to analyze (default `15`, max `1440`) |
+| `-v, --version` · `-h, --help` | Print the version · the help |
 
 > [!TIP]
 > **Device mode:** use the app or site on the device for a minute, then run `adhunt device <ip> --minutes 5`.

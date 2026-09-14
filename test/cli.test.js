@@ -260,3 +260,14 @@ test("a Pi-hole DNS that doesn't answer is reported", async (t) => {
 		/DNS at 127\.0\.0\.1:\d+ did not answer.*set PIHOLE_DNS/,
 	);
 });
+
+test("--version prints the package version", async (t) => {
+	pihole = await fakePihole();
+	t.after(pihole.close);
+	const { version } = JSON.parse(
+		await readFile(new URL("../package.json", import.meta.url), "utf8"),
+	);
+	const out = await adhunt("--version");
+	assert.equal(out.code, 0);
+	assert.equal(out.stdout.trim(), version);
+});

@@ -87,6 +87,7 @@ const shown = (cand) =>
 	cand.kind === "regex"
 		? `${cand.target} ${c("dim", "(+subdomains)")}`
 		: cand.target;
+const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const short = (list, n = 6) =>
 	list.length > n
 		? `${list.slice(0, n).join(", ")} … +${list.length - n}`
@@ -95,12 +96,13 @@ const short = (list, n = 6) =>
 function printReport(scan) {
 	say("");
 	say(c("bold", `adhunt · ${scan.finalUrl || scan.site}`));
-	say(
-		c(
-			"dim",
-			`  ${scan.title ? `${scan.title.slice(0, 70)} · ` : ""}${scan.browser} · ${scan.requestCount} requests · ${scan.hostCount} domains`,
-		),
-	);
+	const summary = [
+		scan.title?.slice(0, 70),
+		scan.browser,
+		count(scan.requestCount, "request"),
+		count(scan.hostCount, "domain"),
+	];
+	say(c("dim", `  ${summary.filter(Boolean).join(" · ")}`));
 	for (const [group, meta] of Object.entries(GROUPS)) {
 		const items = scan.candidates.filter((x) => x.group === group);
 		if (!items.length) continue;
@@ -387,7 +389,7 @@ async function cmdList(cfg) {
 	say(
 		c(
 			"dim",
-			`\n${mine.length} entries · remove one with: adhunt remove <domain>`,
+			`\n${count(mine.length, "entry", "entries")} · remove one with: adhunt remove <domain>`,
 		),
 	);
 }
@@ -549,7 +551,7 @@ async function cmdSetup(cfg) {
 	say(
 		c(
 			"green",
-			`✓ Connected to Pi-hole (${denied.length} domains on the deny list, blocking mode ${blocking.mode}) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
+			`✓ Connected to Pi-hole (${count(denied.length, "domain")} on the deny list, blocking mode ${blocking.mode}) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
 		),
 	);
 }

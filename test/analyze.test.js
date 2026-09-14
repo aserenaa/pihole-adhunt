@@ -21,7 +21,9 @@ let result;
 const cand = (target) => result.candidates.find((c) => c.target === target);
 
 before(async () => {
-	engines = await loadEngines(join(tmpdir(), "adhunt-test-cache"));
+	engines = await loadEngines(
+		process.env.ADHUNT_TEST_CACHE || join(tmpdir(), "adhunt-test-cache"),
+	);
 	result = analyze(
 		await fromHar(
 			fileURLToPath(new URL("./fixtures/news.har", import.meta.url)),

@@ -2,6 +2,8 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, win32 } from "node:path";
 
+import { piholeUrl } from "./options.js";
+
 /**
  * Where config, state and cache live: ADHUNT_HOME, else %APPDATA%\adhunt on Windows,
  * else $XDG_CONFIG_HOME/adhunt or ~/.config/adhunt (macOS included).
@@ -27,15 +29,24 @@ const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 const DEFAULTS = { piholeUrl: "", dnsServer: "" };
 
-export async function loadConfig() {
-	let file = {};
+/** The saved config file, without environment overrides. */
+export async function readConfigFile(file = CONFIG_FILE) {
 	try {
-		file = JSON.parse(await readFile(CONFIG_FILE, "utf8"));
-	} catch {}
-	const cfg = { ...DEFAULTS, ...file };
-	if (process.env.PIHOLE_URL) cfg.piholeUrl = process.env.PIHOLE_URL;
-	if (process.env.PIHOLE_DNS) cfg.dnsServer = process.env.PIHOLE_DNS;
-	cfg.piholeUrl = cfg.piholeUrl.replace(/\/+$/, "");
+		return JSON.parse(await readFile(file, "utf8"));
+	} catch {
+		return {};
+	}
+}
+
+/** Saved config with PIHOLE_URL and PIHOLE_DNS applied on top. */
+export async function loadConfig({
+	env = process.env,
+	file = CONFIG_FILE,
+} = {}) {
+	const cfg = { ...DEFAULTS, ...(await readConfigFile(file)) };
+	if (env.PIHOLE_URL) cfg.piholeUrl = env.PIHOLE_URL;
+	if (env.PIHOLE_DNS) cfg.dnsServer = env.PIHOLE_DNS;
+	if (cfg.piholeUrl) cfg.piholeUrl = piholeUrl(cfg.piholeUrl);
 	return cfg;
 }
 

@@ -32,6 +32,27 @@ export function wholeNumber(value, flag, { fallback, max }) {
 	return n;
 }
 
+/**
+ * "pi.hole" → "http://pi.hole"; "http://192.0.2.53/admin/" → "http://192.0.2.53". The API lives next
+ * to the web interface, so a pasted /admin path is dropped; a reverse-proxy prefix is kept.
+ */
+export function piholeUrl(input) {
+	let url;
+	try {
+		url = new URL(input.includes("://") ? input : `http://${input}`);
+	} catch {
+		throw new Error(`"${input}" is not a valid Pi-hole URL.`);
+	}
+	if (url.protocol !== "http:" && url.protocol !== "https:")
+		throw new Error(
+			`The Pi-hole URL must use http:// or https:// (got "${input}").`,
+		);
+	const prefix = url.pathname
+		.replace(/\/admin(\/.*)?$/i, "")
+		.replace(/\/+$/, "");
+	return `${url.origin}${prefix}`;
+}
+
 /** "example.com" → "https://example.com/". Only http(s) pages can be scanned. */
 export function pageUrl(input) {
 	let url;

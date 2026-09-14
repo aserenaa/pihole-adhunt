@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { configDir, writePrivateJson } from "../src/config.js";
+import { configDir, loadConfig, writePrivateJson } from "../src/config.js";
 
 test("config dir: ADHUNT_HOME wins everywhere", () => {
 	assert.equal(
@@ -61,4 +61,32 @@ test("state files are private to the user", {
 	await writeFile(older, "{}", { mode: 0o644 });
 	await writePrivateJson(older, { at: "now" });
 	assert.equal((await stat(older)).mode & 0o777, 0o600);
+});
+
+test("loadConfig: environment overrides the file, and URLs are normalized", async (t) => {
+	const dir = await mkdtemp(join(tmpdir(), "adhunt-config-"));
+	t.after(() => rm(dir, { recursive: true, force: true }));
+	const file = join(dir, "config.json");
+	await writeFile(
+		file,
+		JSON.stringify({ piholeUrl: "http://192.0.2.53/admin/", dnsServer: "" }),
+	);
+	assert.deepEqual(await loadConfig({ env: {}, file }), {
+		piholeUrl: "http://192.0.2.53",
+		dnsServer: "",
+	});
+	assert.deepEqual(
+		await loadConfig({
+			env: { PIHOLE_URL: "pi.hole", PIHOLE_DNS: "192.0.2.53:1053" },
+			file,
+		}),
+		{ piholeUrl: "http://pi.hole", dnsServer: "192.0.2.53:1053" },
+	);
+	assert.deepEqual(
+		await loadConfig({ env: {}, file: join(dir, "missing.json") }),
+		{
+			piholeUrl: "",
+			dnsServer: "",
+		},
+	);
 });

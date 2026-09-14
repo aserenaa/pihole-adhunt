@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { pageUrl, parseSelection, wholeNumber } from "../src/options.js";
+import {
+	pageUrl,
+	parseSelection,
+	piholeUrl,
+	wholeNumber,
+} from "../src/options.js";
 
 const scan = {
 	candidates: [
@@ -59,4 +64,20 @@ test("page URLs: https by default, only http(s)", () => {
 		"exa mple.com",
 	])
 		assert.throws(() => pageUrl(bad), /not a valid URL/, bad);
+});
+
+test("Pi-hole URLs: scheme added, /admin and trailing slashes dropped, prefixes kept", () => {
+	assert.equal(piholeUrl("pi.hole"), "http://pi.hole");
+	assert.equal(piholeUrl("http://192.0.2.53/"), "http://192.0.2.53");
+	assert.equal(piholeUrl("http://192.0.2.53/admin/"), "http://192.0.2.53");
+	assert.equal(
+		piholeUrl("https://pi.hole:8443/admin/index.lp"),
+		"https://pi.hole:8443",
+	);
+	assert.equal(
+		piholeUrl("https://home.example/pihole/admin"),
+		"https://home.example/pihole",
+	);
+	assert.throws(() => piholeUrl("ftp://pi.hole"), /must use http/);
+	assert.throws(() => piholeUrl("http://exa mple"), /not a valid Pi-hole URL/);
 });

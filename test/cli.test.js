@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createSocket } from "node:dgram";
-import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,7 +20,10 @@ const ENGINE_CACHE =
  * (NULL blocking mode) for denied names and a documentation address for everything else.
  * failAdds: how many adds succeed before the API starts answering 500.
  */
-async function fakePihole({ failAdds = Number.POSITIVE_INFINITY } = {}) {
+async function fakePihole({
+	failAdds = Number.POSITIVE_INFINITY,
+	password = "test",
+} = {}) {
 	const deny = [];
 	const denied = (name) =>
 		deny.some((e) =>
@@ -37,8 +40,10 @@ async function fakePihole({ failAdds = Number.POSITIVE_INFINITY } = {}) {
 		});
 		req.on("end", () => {
 			const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
-			if (path === "/api/auth" && req.method === "POST")
-				return json(res, 200, { session: { valid: true, sid: "sid" } });
+			if (path === "/api/auth" && req.method === "POST") {
+				const valid = JSON.parse(body).password === password;
+				return json(res, valid ? 200 : 401, { session: { valid, sid: "sid" } });
+			}
 			if (path === "/api/auth") return res.writeHead(204).end();
 			if (path === "/api/config/dns/blocking")
 				return json(res, 200, {
@@ -123,9 +128,12 @@ before(async () => {
 after(() => rm(home, { recursive: true, force: true }));
 
 /** Runs the CLI against the fake Pi-hole → { code, stdout, stderr }. */
-function adhunt(...args) {
+const adhunt = (...args) => adhuntWith({}, ...args);
+
+/** input: text piped to stdin; env: extra or replaced environment variables. */
+function adhuntWith({ input, env = {} }, ...args) {
 	return new Promise((resolve) => {
-		execFile(
+		const child = execFile(
 			process.execPath,
 			[CLI, ...args],
 			{
@@ -137,12 +145,14 @@ function adhunt(...args) {
 					PIHOLE_PASSWORD: "test",
 					PIHOLE_DNS: pihole.dnsServer,
 					NO_COLOR: "1",
+					...env,
 				},
 				timeout: 60_000,
 			},
 			(error, stdout, stderr) =>
 				resolve({ code: error ? error.code : 0, stdout, stderr }),
 		);
+		child.stdin.end(input);
 	});
 }
 
@@ -187,4 +197,36 @@ test("a Pi-hole error midway keeps what was added undoable", async (t) => {
 
 	assert.equal((await adhunt("undo")).code, 0);
 	assert.equal(pihole.deny.length, 0);
+});
+
+test("setup saves a normalized URL only after logging in", async (t) => {
+	pihole = await fakePihole({ password: "right" });
+	t.after(pihole.close);
+	const config = join(home, "config.json");
+	const unset = { PIHOLE_URL: "" };
+
+	const wrong = await adhuntWith(
+		{
+			input: `${pihole.url}/admin/\n`,
+			env: { ...unset, PIHOLE_PASSWORD: "wrong" },
+		},
+		"setup",
+	);
+	assert.equal(wrong.code, 1);
+	assert.match(wrong.stderr, /rejected the password/);
+	await assert.rejects(stat(config), { code: "ENOENT" });
+
+	const right = await adhuntWith(
+		{
+			input: `${pihole.url}/admin/\n`,
+			env: { ...unset, PIHOLE_PASSWORD: "right" },
+		},
+		"setup",
+	);
+	assert.equal(right.code, 0, right.stderr);
+	assert.match(right.stdout, /Connected to Pi-hole/);
+	// PIHOLE_DNS came from the environment, so it isn't written to the file.
+	assert.deepEqual(JSON.parse(await readFile(config, "utf8")), {
+		piholeUrl: pihole.url,
+	});
 });

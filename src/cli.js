@@ -4,7 +4,7 @@ import { parseArgs, styleText } from "node:util";
 
 import { analyze, finalize, loadEngines } from "./analyze.js";
 import { capture, fromHar } from "./capture.js";
-import { CACHE_DIR, loadConfig, saveConfig } from "./config.js";
+import { CACHE_DIR, loadConfig, readConfigFile, saveConfig } from "./config.js";
 import {
 	forgetPassword,
 	keychainName,
@@ -13,7 +13,7 @@ import {
 	storedPassword,
 } from "./credentials.js";
 import { selectCandidates } from "./menu.js";
-import { pageUrl, parseSelection, wholeNumber } from "./options.js";
+import { pageUrl, parseSelection, piholeUrl, wholeNumber } from "./options.js";
 import {
 	findGroup,
 	fromWildcard,
@@ -519,13 +519,8 @@ async function cmdDevice(ip, opts, cfg) {
 
 async function cmdSetup(cfg) {
 	const current = cfg.piholeUrl || "http://pi.hole";
-	const url = (await prompt(`Pi-hole URL [${current}]: `)).trim() || current;
-	cfg.piholeUrl = (url.includes("://") ? url : `http://${url}`).replace(
-		/\/+$/,
-		"",
-	);
-	say(
-		`Config saved to ${await saveConfig({ piholeUrl: cfg.piholeUrl, dnsServer: cfg.dnsServer })}`,
+	cfg.piholeUrl = piholeUrl(
+		(await prompt(`Pi-hole URL [${current}]: `)).trim() || current,
 	);
 
 	let password = process.env.PIHOLE_PASSWORD;
@@ -543,10 +538,16 @@ async function cmdSetup(cfg) {
 			)) || stored;
 		if (!password) throw new Error("No password entered.");
 	}
-	// Log in before storing anything, so a typo is never saved.
+	// Log in before saving anything, so a wrong URL or password is never stored.
 	const [denied, blocking] = await session(cfg, password, (ph) =>
 		Promise.all([ph.listDeny(), ph.blocking()]),
 	);
+	// Environment overrides (PIHOLE_DNS) stay out of the saved file.
+	const file = await saveConfig({
+		...(await readConfigFile()),
+		piholeUrl: cfg.piholeUrl,
+	});
+	say(c("dim", `Config saved to ${file}`));
 	if (!process.env.PIHOLE_PASSWORD && password !== stored) {
 		try {
 			savePassword(password);

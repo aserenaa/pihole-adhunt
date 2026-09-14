@@ -27,7 +27,7 @@ you can list or undo it later.
 </p>
 
 <details>
-<summary>Example output as text</summary>
+<summary>Example output as text (the menu, then the result of <em>Block selected</em>)</summary>
 
 ```text
 $ adhunt https://news.example.com
@@ -40,25 +40,24 @@ $ adhunt https://news.example.com
 adhunt · https://news.example.com/
   Example News · Chrome 140.0.7339.81 · 412 requests · 87 domains
 
-🔴 BLOCK — ads/trackers with a full-domain EasyList rule
-  [x]  1  amazon-adsystem.com (+subdomains)  Amazon Advertising · advertising · 14 req
-           hosts: aax.amazon-adsystem.com, c.amazon-adsystem.com
-           rule ||amazon-adsystem.com^
-  [x]  2  adnxs.com (+subdomains)  AppNexus · advertising · 6 req
-           hosts: ib.adnxs.com
-           rule ||adnxs.com^
-
-🟠 REVIEW — likely ads, but blocking may break something
-  [ ]  3  googletagmanager.com (+subdomains)  Google Tag · advertising · 2 req
-           hosts: www.googletagmanager.com
-           rule ||googletagmanager.com^$3p · ⚠ may break site features
-  [ ]  4  rtb.bidder.example  5 req
-           loaded by ib.adnxs.com (ad)
-
 ✅ Already blocked by Pi-hole (3): cdn.taboola.com, securepubads.g.doubleclick.net, trc.taboola.com
 ⚪ Ignored: 9 first-party · 12 safe infrastructure (ajax.googleapis.com, cdnjs.cloudflare.com, fonts.googleapis.com, fonts.gstatic.com … +8)
 
-Block which? [r = recommended (1 2) · numbers: 1 3 5-7 · r 9 · Enter = nothing] r
+Block which?  ↑↓ move · space toggle · r recommended · n none · enter confirm · esc cancel
+
+🔴 BLOCK
+❯ [x] amazon-adsystem.com (+subdomains)   Amazon Advertising · advertising · 14 req
+  [x] adnxs.com (+subdomains)             AppNexus · advertising · 6 req
+🟠 REVIEW
+  [ ] rtb.bidder.example                  5 req
+  [ ] googletagmanager.com (+subdomains)  Google Tag · advertising · 2 req
+  ────────────────────────────────────────────────────────────
+  ▸ Block selected (2)
+  ▸ Block recommended (2)
+  ▸ Nothing
+
+  rule ||amazon-adsystem.com^
+  hosts: aax.amazon-adsystem.com, c.amazon-adsystem.com
 
   ＋ amazon-adsystem.com (+subdomains)
   ＋ adnxs.com (+subdomains)
@@ -74,6 +73,7 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 - 🧠 **Battle-tested classification** — [Ghostery's adblocker engine](https://github.com/ghostery/adblocker) with EasyList, EasyPrivacy and uBlock Origin lists, plus [TrackerDB](https://github.com/ghostery/trackerdb) to name the company behind each domain.
 - 🧭 **Follows ad chains** — flags unknown domains that were loaded *by* an ad script or ad iframe.
 - ✅ **Knows what Pi-hole already blocks** — asks Pi-hole's own DNS, no matter which DNS your computer uses, and reads the answer according to your blocking mode (`NULL`, `IP`, `IP_NODATA_AAAA`, `NX` or `NODATA`).
+- ⌨️ **Review with the keyboard** — pick what to block with the arrow keys and space; recommended domains start marked, and the rule behind each one is a keystroke away.
 - 🛡️ **Safe by default** — never blocks without confirmation, never proposes critical infrastructure (Google, CDNs, Apple, Microsoft…), and flags rules that tend to break sites.
 - ↩️ **Reversible** — every entry is tagged `adhunt · site · date`; `undo`, `list` and `remove` are built in.
 - 📱 **Device mode** — no browser needed: analyze what a phone, TV or app asked your Pi-hole for in the last few minutes.
@@ -144,7 +144,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | Command | What it does |
 |---|---|
 | `adhunt <url>` | Scan a page and choose what to block |
-| `adhunt block r` · `adhunt block 1 4 7-9` | Block from the last scan (recommended, or by number) |
+| `adhunt block r` · `adhunt block 1 4 7-9` | Block from the last scan without the menu (recommended, or by number), for scripts |
 | `adhunt undo` | Remove the last batch you blocked |
 | `adhunt list` | Show everything adhunt added to Pi-hole |
 | `adhunt remove <domain>` | Remove one entry added by adhunt |
@@ -162,10 +162,25 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | `-y, --yes` | Block the recommended entries without asking |
 | `-g, --group <g>` | Add blocked domains to this Pi-hole group, by name or id (default: `Default`) |
 | `--json` | Print the analysis as JSON |
+| `--no-menu` | Type the selection (`r`, `1 3 5-7`) instead of using the menu |
 | `--minutes <n>` | Device mode: minutes of query log to analyze (default `15`, max `1440`) |
 
 > [!TIP]
 > **Device mode:** use the app or site on the device for a minute, then run `adhunt device <ip> --minutes 5`.
+
+### Choosing what to block
+
+After a scan, adhunt opens a menu with the candidates grouped as in [How it decides](#how-it-decides). Recommended domains start marked, and the rule, hosts and reason of the highlighted row are shown below the list.
+
+| Key | Action |
+|---|---|
+| `↑` `↓` (or `k` `j`) | Move between domains and actions |
+| `Space` | Mark or unmark the highlighted domain |
+| `r` · `n` | Mark only the recommended domains · unmark everything |
+| `Enter` | On a domain: mark or unmark it · on an action: **Block selected**, **Block recommended** or **Nothing** |
+| `Esc` · `Ctrl+C` | Leave without blocking anything |
+
+The menu needs an interactive terminal. With `--no-menu` or `TERM=dumb` (for example with a screen reader), adhunt lists the candidates with numbers and asks you to type `r` or `1 3 5-7` instead; `adhunt block` accepts the same selection later.
 
 ## How it decides
 
@@ -236,6 +251,12 @@ The password was stored by another program (for example the `security` command) 
 <summary><code>Could not store the password in the system keyring</code></summary>
 
 Linux needs a running Secret Service provider such as GNOME Keyring or KWallet. On servers and containers without one, set `PIHOLE_PASSWORD` instead.
+</details>
+
+<details>
+<summary>The arrow keys don't work in the menu</summary>
+
+In Git Bash (mintty), run adhunt through `winpty`, or use Windows Terminal. In any terminal, `--no-menu` switches to typing the selection.
 </details>
 
 <details>

@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - Check what Pi-hole already blocks through its own DNS, for every blocking mode.
 - Block with review through the Pi-hole v6 API, as wildcard or exact entries tagged `adhunt`, with
   `undo`, `list`, `remove` and `--group`.
+- Arrow-key menu to choose what to block (space to mark, enter to confirm), with typed selection
+  through `--no-menu`, `TERM=dumb` or `adhunt block`.
+- `PIHOLE_DNS` accepts a port, for Pi-hole containers that publish DNS on another port.
 - Device mode (`adhunt device`, `adhunt clients`) and HAR mode (`--har`).
 - `adhunt setup` and `adhunt logout`, with the password in the macOS Keychain, Windows Credential
   Manager or Secret Service.

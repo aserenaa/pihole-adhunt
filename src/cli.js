@@ -14,6 +14,7 @@ import {
 	savePassword,
 	storedPassword,
 } from "./credentials.js";
+import { selectCandidates } from "./menu.js";
 import { pageUrl, parseSelection, wholeNumber } from "./options.js";
 import {
 	findGroup,
@@ -47,7 +48,7 @@ const HELP = `adhunt — find the ad domains a page loads and block them in Pi-h
 Usage:
   adhunt <url> [options]             scan a page (shortcut for "scan")
   adhunt scan <url> [options]
-  adhunt block <selection>           block from the last scan: r (recommended), 1 3 5-7
+  adhunt block <selection>           block from the last scan without the menu: r (recommended), 1 3 5-7
   adhunt undo                        undo the last block
   adhunt list                        everything adhunt added to Pi-hole
   adhunt remove <domain>             remove a domain added by adhunt
@@ -65,6 +66,11 @@ Scan options:
   -y, --yes         block the recommended entries without asking
       --json        print the result as JSON
   -g, --group <g>   add blocked domains to this Pi-hole group, by name or id (default: Default)
+      --no-menu     type the selection (r, 1 3 5-7) instead of using the menu
+
+Choosing what to block:
+  ↑↓ move · space mark or unmark · r recommended · n none · enter confirm · esc cancel
+  The menu needs an interactive terminal; with --no-menu or TERM=dumb you type the numbers.
 `;
 
 const GROUPS = {
@@ -93,7 +99,8 @@ const short = (list, n = 6) =>
 		? `${list.slice(0, n).join(", ")} … +${list.length - n}`
 		: list.join(", ");
 
-function printReport(scan) {
+/** list: false leaves the candidates out, for when the selection menu shows them. */
+function printReport(scan, { list = true } = {}) {
 	say("");
 	say(c("bold", `adhunt · ${scan.finalUrl || scan.site}`));
 	const summary = [
@@ -105,7 +112,7 @@ function printReport(scan) {
 	say(c("dim", `  ${summary.filter(Boolean).join(" · ")}`));
 	for (const [group, meta] of Object.entries(GROUPS)) {
 		const items = scan.candidates.filter((x) => x.group === group);
-		if (!items.length) continue;
+		if (!list || !items.length) continue;
 		say("");
 		say(c("bold", meta.title));
 		const limit = group === "unknown" && scan.mode === "device" ? 30 : Infinity;
@@ -293,9 +300,31 @@ async function cmdScan(url, opts, cfg) {
 	await review(scan, opts, cfg);
 }
 
+/** Typed selection, for terminals that can't draw the menu (TERM=dumb, screen readers). */
+async function askTyped(scan, rec) {
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	try {
+		for (;;) {
+			const ans = await rl.question(
+				`\nBlock which? ${c("dim", `[r = recommended (${rec.map((x) => x.n).join(" ") || "—"}) · numbers: 1 3 5-7 · r 9 · Enter = nothing]`)} `,
+			);
+			try {
+				return parseSelection([ans], scan);
+			} catch (e) {
+				say(c("yellow", e.message));
+			}
+		}
+	} finally {
+		rl.close();
+	}
+}
+
 async function review(scan, opts, cfg) {
 	if (opts.json) return say(JSON.stringify(scan, null, 2));
-	printReport(scan);
+	const interactive =
+		process.stdin.isTTY && tty && !opts.yes && Boolean(cfg.piholeUrl);
+	const menu = interactive && !opts["no-menu"] && process.env.TERM !== "dumb";
+	printReport(scan, { list: !menu });
 	if (!scan.candidates.length) return;
 	const rec = scan.candidates.filter((x) => x.preselected);
 	if (opts.yes) return applyBlock(scan, rec, cfg, opts);
@@ -306,7 +335,7 @@ async function review(scan, opts, cfg) {
 				'\nTo block any of these, run "adhunt setup" first (or set PIHOLE_URL).',
 			),
 		);
-	if (!process.stdin.isTTY || !tty) {
+	if (!interactive) {
 		return say(
 			c(
 				"dim",
@@ -314,23 +343,10 @@ async function review(scan, opts, cfg) {
 			),
 		);
 	}
-	const rl = createInterface({ input: process.stdin, output: process.stdout });
-	let selected;
-	try {
-		for (;;) {
-			const ans = await rl.question(
-				`\nBlock which? ${c("dim", `[r = recommended (${rec.map((x) => x.n).join(" ") || "—"}) · numbers: 1 3 5-7 · r 9 · Enter = nothing]`)} `,
-			);
-			try {
-				selected = parseSelection([ans], scan);
-				break;
-			} catch (e) {
-				say(c("yellow", e.message));
-			}
-		}
-	} finally {
-		rl.close();
-	}
+	if (menu) say("");
+	const selected = menu
+		? await selectCandidates(scan, { style: c })
+		: await askTyped(scan, rec);
 	await applyBlock(scan, selected, cfg, opts);
 }
 
@@ -579,6 +595,7 @@ async function main() {
 			json: { type: "boolean" },
 			minutes: { type: "string" },
 			group: { type: "string", short: "g" },
+			"no-menu": { type: "boolean" },
 			help: { type: "boolean", short: "h" },
 		},
 	});

@@ -34,8 +34,10 @@ import {
 const LOCAL_NAMES = /\.(lan|local|localdomain|home|internal|arpa|ts\.net)$/;
 
 const tty = process.stdout.isTTY;
+// https://no-color.org: any non-empty NO_COLOR turns colors off.
+const color = tty && !process.env.NO_COLOR;
 const c = (style, text) =>
-	tty ? styleText(style, String(text)) : String(text);
+	color ? styleText(style, String(text)) : String(text);
 const say = (...a) => console.log(...a);
 const note = (msg) => process.stderr.write(c("dim", `  · ${msg}\n`));
 const warn = (msg) => process.stderr.write(c("yellow", `  ! ${msg}\n`));

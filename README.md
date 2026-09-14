@@ -192,6 +192,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 | `PIHOLE_PASSWORD` | App password (overrides the keychain) |
 | `PIHOLE_DNS` | DNS server used for "already blocked" checks (defaults to the Pi-hole host) |
 | `ADHUNT_HOME` | Custom directory for config, state and cache |
+| `NO_COLOR` | Disable colored output |
 
 ## Troubleshooting
 

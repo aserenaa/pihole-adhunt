@@ -30,7 +30,7 @@ describe your browsing and your devices.
 - **Pi-hole API transport.** Over `http://` the app password is sent in clear text. adhunt warns
   when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses.
   Prefer HTTPS: copy `/etc/pihole/tls_ca.crt` from Pi-hole, set `NODE_EXTRA_CA_CERTS` to it, and use
-  `https://pi.hole`.
+  `https://pi.hole` (the name must resolve on this computer).
 - **Scanned pages run their scripts.** adhunt loads the page, including its ads, in headless Chrome,
   Edge or Chromium with the browser sandbox enabled. It only falls back to running without the
   sandbox when the system cannot provide one, and says so. Scan pages you would open anyway.

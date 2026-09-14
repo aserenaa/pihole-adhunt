@@ -23,4 +23,5 @@ All notable changes to this project are documented here. The format follows
   Manager or Secret Service.
 - Warnings for plain-HTTP Pi-hole URLs outside the local network and for Pi-hole versions older
   than v6.
-- CI on macOS, Linux and Windows.
+
+[Unreleased]: https://github.com/aserenaa/pihole-adhunt/commits/main

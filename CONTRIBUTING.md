@@ -14,8 +14,8 @@ pnpm format        # apply Biome's fixes
 ```
 
 Tests must not need a Pi-hole or external websites: use local `node:http` servers, synthetic
-fixtures and pure functions. The only network access allowed is the one-time download of
-Ghostery's prebuilt filter engine.
+fixtures and pure functions. The only network access allowed is the filter-list download that
+builds Ghostery's engine (cached for three days).
 
 ## Pull requests
 

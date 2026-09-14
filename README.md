@@ -27,7 +27,7 @@ you can list or undo it later.
 </p>
 
 <details>
-<summary>Example output as text (the menu, then the result of <em>Block selected</em>)</summary>
+<summary>Example output as text (the open menu, then what stays on screen after <em>Block selected</em>)</summary>
 
 ```text
 $ adhunt https://news.example.com
@@ -59,6 +59,13 @@ Block which?  ↑↓ move · space toggle · r recommended · n none · enter co
   rule ||amazon-adsystem.com^
   hosts: aax.amazon-adsystem.com, c.amazon-adsystem.com
 
+🔴 BLOCK
+  [x] amazon-adsystem.com (+subdomains)   Amazon Advertising · advertising · 14 req
+  [x] adnxs.com (+subdomains)             AppNexus · advertising · 6 req
+🟠 REVIEW
+  [ ] rtb.bidder.example                  5 req
+  [ ] googletagmanager.com (+subdomains)  Google Tag · advertising · 2 req
+
   ＋ amazon-adsystem.com (+subdomains)
   ＋ adnxs.com (+subdomains)
 
@@ -70,7 +77,7 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 ## Features
 
 - 🔍 **Real browser capture** — headless Chrome or Edge via Playwright; accepts cookie banners, scrolls for lazy-loaded ads, optionally clicks to reveal pop-unders, desktop or iPhone emulation.
-- 🧠 **Battle-tested classification** — [Ghostery's adblocker engine](https://github.com/ghostery/adblocker) with EasyList, EasyPrivacy and uBlock Origin lists, plus [TrackerDB](https://github.com/ghostery/trackerdb) to name the company behind each domain.
+- 🧠 **Battle-tested classification** — [Ghostery's adblocker engine](https://github.com/ghostery/adblocker) with EasyList, EasyPrivacy, uBlock Origin and Peter Lowe's lists, plus [TrackerDB](https://github.com/ghostery/trackerdb) to name the company behind each domain.
 - 🧭 **Follows ad chains** — flags unknown domains that were loaded *by* an ad script or ad iframe.
 - ✅ **Knows what Pi-hole already blocks** — asks Pi-hole's own DNS, no matter which DNS your computer uses, and reads the answer according to your blocking mode (`NULL`, `IP`, `IP_NODATA_AAAA`, `NX` or `NODATA`).
 - ⌨️ **Review with the keyboard** — pick what to block with the arrow keys and space; recommended domains start marked, and the rule behind each one is a keystroke away.
@@ -143,7 +150,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 
 | Command | What it does |
 |---|---|
-| `adhunt <url>` | Scan a page and choose what to block |
+| `adhunt <url>` · `adhunt scan <url>` | Scan a page and choose what to block |
 | `adhunt block r` · `adhunt block 1 4 7-9` | Block from the last scan without the menu (recommended, or by number), for scripts |
 | `adhunt undo` | Remove the last batch you blocked |
 | `adhunt list` | Show everything adhunt added to Pi-hole |
@@ -178,7 +185,8 @@ After a scan, adhunt opens a menu with the candidates grouped as in [How it deci
 | `Space` | Mark or unmark the highlighted domain |
 | `r` · `n` | Mark only the recommended domains · unmark everything |
 | `Enter` | On a domain: mark or unmark it · on an action: **Block selected**, **Block recommended** or **Nothing** |
-| `Esc` · `Ctrl+C` | Leave without blocking anything |
+| `Home` · `End` | Jump to the first domain · to the last action |
+| `Esc` · `q` · `Ctrl+C` | Leave without blocking anything |
 
 The menu needs an interactive terminal. With `--no-menu` or `TERM=dumb` (for example with a screen reader), adhunt lists the candidates with numbers and asks you to type `r` or `1 3 5-7` instead; `adhunt block` accepts the same selection later.
 
@@ -187,9 +195,9 @@ The menu needs an interactive terminal. With `--no-menu` or `TERM=dumb` (for exa
 | Group | Criteria | Preselected |
 |---|---|---|
 | 🔴 **Block** | An EasyList / EasyPrivacy / uBlock Origin rule blocks the **whole domain** (`\|\|example.com^`) and it isn't known to break sites | ✅ |
-| 🟠 **Review** | The rule exists but often breaks features (Tag Manager, Facebook SDK…), every request matched path-level rules, it opened a pop-up, or it was loaded by an ad | — |
+| 🟠 **Review** | The rule exists but often breaks features (Tag Manager, Facebook SDK…, or a TrackerDB category other than advertising and site analytics), every request matched path-level rules, it opened a pop-up, it was loaded by an ad, or TrackerDB calls it advertising but no rule matches | — |
 | 🟡 **Unknown** | Third-party domain with no matching rule | — |
-| ✅ ⚪ ℹ️ | Already blocked · first-party or safe infrastructure · ads on a path of a required domain | hidden |
+| ✅ ⚪ ℹ️ ⚫ | Already blocked · first-party or safe infrastructure · ads on a path of a required domain · domains that no longer resolve | hidden |
 
 - Full-domain rules become Pi-hole **wildcard** entries (`(\.|^)example\.com$`, the same format as `pihole --wild`); everything else is added as an exact domain.
 - Only rules without a path translate to DNS. `||youtube.com/pagead/` can't be blocked by Pi-hole without blocking YouTube — adhunt tells you instead of breaking things.
@@ -206,7 +214,7 @@ The menu needs an interactive terminal. With `--no-menu` or `TERM=dumb` (for exa
 - adhunt talks to your Pi-hole, to the page you scan (and whatever that page loads), and to GitHub to refresh the filter lists every few days. Nothing else.
 - The app password lives in your **OS keychain** (macOS Keychain, Windows Credential Manager or Secret Service) or the `PIHOLE_PASSWORD` environment variable; adhunt never writes it to a file.
 - Local state (config, last scan, undo history, filter cache) lives in `~/.config/adhunt/` on macOS and Linux (or `$XDG_CONFIG_HOME/adhunt`), `%APPDATA%\adhunt\` on Windows, or `ADHUNT_HOME` if set.
-- **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
+- **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole` (the name must resolve on this computer, for example through Pi-hole's DNS or a hosts-file entry).
 - **HAR files contain cookies and session tokens.** Never share them or attach them to issues.
 
 See [SECURITY.md](SECURITY.md) for what adhunt stores and how to report a vulnerability.
@@ -254,9 +262,9 @@ Linux needs a running Secret Service provider such as GNOME Keyring or KWallet. 
 </details>
 
 <details>
-<summary>The arrow keys don't work in the menu</summary>
+<summary>The menu doesn't appear (Git Bash on Windows)</summary>
 
-In Git Bash (mintty), run adhunt through `winpty`, or use Windows Terminal. In any terminal, `--no-menu` switches to typing the selection.
+Git Bash's terminal (mintty) doesn't look like an interactive console to Node.js, so adhunt prints `adhunt block …` hints instead of the menu. Run it through `winpty adhunt …`, or use Windows Terminal. In any terminal, `--no-menu` switches to typing the selection.
 </details>
 
 <details>
@@ -286,4 +294,4 @@ Built on [Ghostery adblocker](https://github.com/ghostery/adblocker), [Ghostery 
 
 [MIT](LICENSE)
 
-<sub>Not affiliated with Pi-hole, Ghostery, EasyList or uBlock Origin.</sub>
+<sub>Not affiliated with or endorsed by Pi-hole, Ghostery, EasyList, uBlock Origin or Microsoft.</sub>

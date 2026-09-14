@@ -114,6 +114,21 @@ export class PiHole {
 		return (await this.request("GET", `/api/queries?${qs}`)).queries || [];
 	}
 
+	/** How Pi-hole answers blocked queries → { active, mode, ipv4 }. */
+	async blocking() {
+		const [blocking, reply] = await Promise.all([
+			this.request("GET", "/api/config/dns/blocking"),
+			this.request("GET", "/api/config/dns/reply"),
+		]);
+		const { active, mode } = blocking?.config?.dns?.blocking || {};
+		const { force4, IPv4 } = reply?.config?.dns?.reply?.blocking || {};
+		return {
+			active: active !== false,
+			mode: mode || "NULL",
+			ipv4: force4 ? IPv4 : "",
+		};
+	}
+
 	async topClients(count = 15) {
 		return (
 			(await this.request("GET", `/api/stats/top_clients?count=${count}`))
@@ -133,10 +148,34 @@ export async function withPiHole(cfg, password, fn) {
 }
 
 /**
+ * Reads one DNS answer the way Pi-hole's blocking mode writes it → 'blocked' | 'ok' | 'nx' | 'error'.
+ * answer: { addresses } from resolve4(), or { code } from its error. server: the Pi-hole IP queried.
+ * - NULL: 0.0.0.0 · IP / IP_NODATA_AAAA: dns.reply.blocking.IPv4 if forced, else Pi-hole's own IP
+ * - NX: NXDOMAIN (indistinguishable from a dead domain) · NODATA: an empty answer
+ */
+export function dnsAnswerStatus(
+	answer,
+	{ mode = "NULL", ipv4 = "" } = {},
+	server = "",
+) {
+	if (answer.addresses) {
+		const ipMode = mode === "IP" || mode === "IP_NODATA_AAAA";
+		const blockedIp = ipMode ? ipv4 || server : "";
+		return answer.addresses.some((ip) => ip === "0.0.0.0" || ip === blockedIp)
+			? "blocked"
+			: "ok";
+	}
+	if (answer.code === "ENOTFOUND") return mode === "NX" ? "blocked" : "nx";
+	if (answer.code === "ENODATA") return mode === "NODATA" ? "blocked" : "ok";
+	return "error";
+}
+
+/**
  * Asks Pi-hole's DNS directly (not the system resolver) → 'blocked' | 'ok' | 'nx' | 'error'.
  * That way the result covers gravity, regex and CNAMEs even if this computer uses another DNS.
+ * blocking: PiHole#blocking(), so answers are read according to the configured blocking mode.
  */
-export async function makeDnsChecker(cfg) {
+export async function makeDnsChecker(cfg, blocking) {
 	let server = cfg.dnsServer || new URL(cfg.piholeUrl).hostname;
 	if (!isIP(server)) server = (await lookup(server, { family: 4 })).address;
 	const resolver = new Resolver({ timeout: 2500, tries: 2 });
@@ -144,12 +183,10 @@ export async function makeDnsChecker(cfg) {
 	const cache = new Map();
 	const check = async (host) => {
 		try {
-			const ips = await resolver.resolve4(host);
-			return ips.includes("0.0.0.0") ? "blocked" : "ok";
+			const addresses = await resolver.resolve4(host);
+			return dnsAnswerStatus({ addresses }, blocking, server);
 		} catch (e) {
-			if (e.code === "ENOTFOUND") return "nx";
-			if (e.code === "ENODATA") return "ok";
-			return "error";
+			return dnsAnswerStatus({ code: e.code }, blocking, server);
 		}
 	};
 	const one = (host) => {

@@ -63,7 +63,7 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 - 🔍 **Real browser capture** — headless Chrome or Edge via Playwright; accepts cookie banners, scrolls for lazy-loaded ads, optionally clicks to reveal pop-unders, desktop or iPhone emulation.
 - 🧠 **Battle-tested classification** — [Ghostery's adblocker engine](https://github.com/ghostery/adblocker) with EasyList, EasyPrivacy and uBlock Origin lists, plus [TrackerDB](https://github.com/ghostery/trackerdb) to name the company behind each domain.
 - 🧭 **Follows ad chains** — flags unknown domains that were loaded *by* an ad script or ad iframe.
-- ✅ **Knows what Pi-hole already blocks** — asks Pi-hole's own DNS, no matter which DNS your computer uses.
+- ✅ **Knows what Pi-hole already blocks** — asks Pi-hole's own DNS, no matter which DNS your computer uses, and reads the answer according to your blocking mode (`NULL`, `IP`, `IP_NODATA_AAAA`, `NX` or `NODATA`).
 - 🛡️ **Safe by default** — never blocks without confirmation, never proposes critical infrastructure (Google, CDNs, Apple, Microsoft…), and flags rules that tend to break sites.
 - ↩️ **Reversible** — every entry is tagged `adhunt · site · date`; `undo`, `list` and `remove` are built in.
 - 📱 **Device mode** — no browser needed: analyze what a phone, TV or app asked your Pi-hole for in the last few minutes.
@@ -155,6 +155,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 - **DNS blocking can't stop first-party ads.** YouTube, Twitch, Facebook and Instagram serve ads from the same domains as their content.
 - Some sites detect automation and serve fewer ads — try `--headed`, `--mobile`, or a HAR export from your everyday browser.
 - Devices may keep cached DNS answers for a while after you block something.
+- With Pi-hole's `NX` blocking mode, a blocked domain and a nonexistent one get the same answer, so adhunt lists them together as "already blocked (or nonexistent)".
 
 ## Privacy & security
 

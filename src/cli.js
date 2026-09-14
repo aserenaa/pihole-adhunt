@@ -113,10 +113,13 @@ function printReport(scan) {
 			say(c("dim", `           … ${items.length - limit} more (see --json)`));
 	}
 	say("");
-	if (scan.blocked.length)
+	if (scan.blocked.length) {
+		// In NX mode a blocked domain and a nonexistent one get the same answer.
+		const title = `✅ Already blocked by Pi-hole${scan.blockingMode === "NX" ? " (or nonexistent)" : ""}`;
 		say(
-			`${c("green", "✅ Already blocked by Pi-hole")} (${scan.blocked.length}): ${c("dim", short(scan.blocked, 8))}`,
+			`${c("green", title)} (${scan.blocked.length}): ${c("dim", short(scan.blocked, 8))}`,
 		);
+	}
 	if (scan.pathOnly.length)
 		say(
 			`ℹ️  Ads served from paths on required domains — not blockable via DNS (${scan.pathOnly.length}): ${c("dim", short(scan.pathOnly.map((p) => p.host)))}`,
@@ -168,6 +171,15 @@ async function requirePassword() {
 	return pw;
 }
 
+/** DNS checker that reads answers according to Pi-hole's blocking mode (see PiHole#blocking). */
+function blockingChecker(cfg, blocking) {
+	if (!blocking.active)
+		note(
+			"Pi-hole blocking is disabled right now: nothing will show as blocked",
+		);
+	return makeDnsChecker(cfg, blocking);
+}
+
 async function applyBlock(scan, selected, cfg) {
 	if (!selected.length) return say("Nothing selected.");
 	requireUrl(cfg);
@@ -180,7 +192,7 @@ async function applyBlock(scan, selected, cfg) {
 		items: [],
 	};
 	say("");
-	await withPiHole(cfg, password, async (ph) => {
+	const blocking = await withPiHole(cfg, password, async (ph) => {
 		for (const cand of selected) {
 			const domain =
 				cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
@@ -202,6 +214,7 @@ async function applyBlock(scan, selected, cfg) {
 				);
 			}
 		}
+		return ph.blocking();
 	});
 	if (!batch.items.length) return;
 	const history = await loadHistory();
@@ -210,7 +223,7 @@ async function applyBlock(scan, selected, cfg) {
 
 	// Pi-hole reloads its lists in the background: verify via DNS after a moment.
 	await new Promise((r) => setTimeout(r, 2000));
-	const dns = await makeDnsChecker(cfg);
+	const dns = await blockingChecker(cfg, blocking);
 	const states = await dns.many(batch.items.map((i) => i.probe));
 	const ok = batch.items.filter(
 		(i) => states.get(i.probe) === "blocked",
@@ -228,11 +241,15 @@ async function applyBlock(scan, selected, cfg) {
 }
 
 async function cmdScan(url, opts, cfg) {
+	let password = null;
 	if (!opts.har) {
 		if (!url)
 			throw new Error("Missing the URL. Example: adhunt https://example.com");
 		if (!/^https?:\/\//.test(url)) url = `https://${url}`;
 		requireUrl(cfg);
+		password = await requirePassword();
+	} else if (cfg.piholeUrl) {
+		password = getPassword();
 	}
 	note("loading EasyList/EasyPrivacy + TrackerDB…");
 	const engines = await loadEngines(CACHE_DIR);
@@ -249,16 +266,19 @@ async function cmdScan(url, opts, cfg) {
 		throw new Error("No requests were captured (did the page load?).");
 	const result = analyze(cap, engines);
 	let dnsStatus = new Map();
-	if (cfg.piholeUrl) {
+	let blocking;
+	if (password) {
 		note("classifying and querying Pi-hole's DNS…");
-		const dns = await makeDnsChecker(cfg);
+		blocking = await withPiHole(cfg, password, (ph) => ph.blocking());
+		const dns = await blockingChecker(cfg, blocking);
 		dnsStatus = await dns.many(result.candidates.flatMap((x) => x.hosts));
 	} else {
-		note("no Pi-hole configured: skipping the already-blocked check");
+		note("no Pi-hole URL or password: skipping the already-blocked check");
 	}
 	const scan = {
 		mode: opts.har ? "har" : "scan",
 		at: new Date().toISOString(),
+		blockingMode: blocking?.mode,
 		...finalize(result, dnsStatus),
 	};
 	await saveLastScan(scan);
@@ -417,8 +437,14 @@ async function cmdDevice(ip, opts, cfg) {
 	requireUrl(cfg);
 	const minutes = Number(opts.minutes || 15);
 	const until = Math.floor(Date.now() / 1000);
-	const queries = await withPiHole(cfg, await requirePassword(), (ph) =>
-		ph.queries({ clientIp: ip, from: until - minutes * 60, until }),
+	const [queries, blocking] = await withPiHole(
+		cfg,
+		await requirePassword(),
+		(ph) =>
+			Promise.all([
+				ph.queries({ clientIp: ip, from: until - minutes * 60, until }),
+				ph.blocking(),
+			]),
 	);
 	const counts = new Map();
 	let alreadyBlocked = 0;
@@ -448,10 +474,11 @@ async function cmdDevice(ip, opts, cfg) {
 	const result = analyze({ requests, requestedUrl: "", finalUrl: "" }, engines);
 	result.site = `device ${ip}`;
 	result.finalUrl = `device ${ip} · last ${minutes} min`;
-	const dns = await makeDnsChecker(cfg);
+	const dns = await blockingChecker(cfg, blocking);
 	const scan = {
 		mode: "device",
 		at: new Date().toISOString(),
+		blockingMode: blocking.mode,
 		...finalize(
 			result,
 			await dns.many(result.candidates.flatMap((x) => x.hosts)),
@@ -490,16 +517,14 @@ async function cmdSetup(cfg) {
 		return;
 	}
 	const password = await requirePassword();
-	const n = await withPiHole(
-		cfg,
-		password,
-		async (ph) => (await ph.listDeny()).length,
+	const [denied, blocking] = await withPiHole(cfg, password, (ph) =>
+		Promise.all([ph.listDeny(), ph.blocking()]),
 	);
-	const dns = await makeDnsChecker(cfg);
+	const dns = await blockingChecker(cfg, blocking);
 	say(
 		c(
 			"green",
-			`✓ Connected to Pi-hole (${n} domains on the deny list) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
+			`✓ Connected to Pi-hole (${denied.length} domains on the deny list, blocking mode ${blocking.mode}) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
 		),
 	);
 }

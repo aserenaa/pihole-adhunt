@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+	looksLikePage,
 	pageUrl,
 	parseSelection,
 	piholeUrl,
@@ -80,4 +81,17 @@ test("Pi-hole URLs: scheme added, /admin and trailing slashes dropped, prefixes 
 	);
 	assert.throws(() => piholeUrl("ftp://pi.hole"), /must use http/);
 	assert.throws(() => piholeUrl("http://exa mple"), /not a valid Pi-hole URL/);
+});
+
+test("a first argument is a page only if it looks like one", () => {
+	for (const arg of [
+		"example.com",
+		"https://example.com",
+		"localhost",
+		"localhost:8080",
+		"192.0.2.10",
+	])
+		assert.ok(looksLikePage(arg), arg);
+	for (const arg of ["lsit", "blcok", "setpu"])
+		assert.ok(!looksLikePage(arg), arg);
 });

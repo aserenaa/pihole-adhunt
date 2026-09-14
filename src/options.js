@@ -53,6 +53,10 @@ export function piholeUrl(input) {
 	return `${url.origin}${prefix}`;
 }
 
+/** true if a first argument that isn't a command looks like a page to scan (not a mistyped command). */
+export const looksLikePage = (arg) =>
+	/[.:/]/.test(arg) || /^localhost$/i.test(arg);
+
 /** "example.com" → "https://example.com/". Only http(s) pages can be scanned. */
 export function pageUrl(input) {
 	let url;

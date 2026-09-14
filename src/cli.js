@@ -13,7 +13,13 @@ import {
 	storedPassword,
 } from "./credentials.js";
 import { selectCandidates } from "./menu.js";
-import { pageUrl, parseSelection, piholeUrl, wholeNumber } from "./options.js";
+import {
+	looksLikePage,
+	pageUrl,
+	parseSelection,
+	piholeUrl,
+	wholeNumber,
+} from "./options.js";
 import {
 	findGroup,
 	fromWildcard,
@@ -620,6 +626,8 @@ async function main() {
 		case "logout":
 			return cmdLogout();
 		default:
+			if (cmd && !looksLikePage(cmd))
+				throw new Error(`Unknown command "${cmd}". See: adhunt --help`);
 			return cmdScan(cmd, opts, cfg);
 	}
 }

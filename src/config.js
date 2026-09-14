@@ -1,9 +1,26 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 
-export const CONFIG_DIR =
-	process.env.ADHUNT_HOME || join(homedir(), ".config", "adhunt");
+/**
+ * Where config, state and cache live: ADHUNT_HOME, else %APPDATA%\adhunt on Windows,
+ * else $XDG_CONFIG_HOME/adhunt or ~/.config/adhunt (macOS included).
+ */
+export function configDir(
+	env = process.env,
+	platform = process.platform,
+	home = homedir(),
+) {
+	if (env.ADHUNT_HOME) return env.ADHUNT_HOME;
+	if (platform === "win32")
+		return win32.join(
+			env.APPDATA || win32.join(home, "AppData", "Roaming"),
+			"adhunt",
+		);
+	return join(env.XDG_CONFIG_HOME || join(home, ".config"), "adhunt");
+}
+
+export const CONFIG_DIR = configDir();
 export const STATE_DIR = join(CONFIG_DIR, "state");
 export const CACHE_DIR = join(CONFIG_DIR, "cache");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");

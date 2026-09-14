@@ -90,6 +90,23 @@ adhunt setup            # Pi-hole URL + app password (stored in your OS keychain
 stores it. Without a keychain (for example on a headless Linux server), set `PIHOLE_PASSWORD` instead.
 
 <details>
+<summary><strong>Windows (PowerShell)</strong></summary>
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install pnpm.pnpm
+git clone https://github.com/aserenaa/pihole-adhunt.git
+cd pihole-adhunt
+pnpm install
+pnpm setup               # adds pnpm's global bin folder to PATH, then restart the terminal
+pnpm link --global
+adhunt setup
+```
+
+Microsoft Edge is used automatically when Chrome isn't installed. Windows Terminal is recommended for colors and emoji; in Git Bash (mintty), run `winpty adhunt setup` so the password prompt works.
+</details>
+
+<details>
 <summary><strong>No Chrome or Edge?</strong></summary>
 
 ```bash
@@ -163,7 +180,7 @@ adhunt --har capture.har                    # analyze a DevTools HAR export inst
 
 - adhunt talks to your Pi-hole, to the page you scan (and whatever that page loads), and to GitHub to refresh the filter lists every few days. Nothing else.
 - The app password lives in your **OS keychain** (macOS Keychain, Windows Credential Manager or Secret Service) or the `PIHOLE_PASSWORD` environment variable; adhunt never writes it to a file.
-- Local state (config, last scan, undo history, filter cache) lives in `~/.config/adhunt/`, or in `ADHUNT_HOME` if set.
+- Local state (config, last scan, undo history, filter cache) lives in `~/.config/adhunt/` on macOS and Linux (or `$XDG_CONFIG_HOME/adhunt`), `%APPDATA%\adhunt\` on Windows, or `ADHUNT_HOME` if set.
 - **Use HTTPS or a trusted network.** Over `http://` the password travels in clear text — fine on your LAN or through a VPN such as WireGuard or Tailscale, not across the internet. adhunt warns when a plain-HTTP URL points outside private, link-local or VPN (`100.64.0.0/10`) addresses and local names such as `pi.hole` or `*.local`. For HTTPS with Pi-hole's self-signed certificate, copy `/etc/pihole/tls_ca.crt` from your Pi-hole, set `NODE_EXTRA_CA_CERTS=/path/to/tls_ca.crt`, and use `https://pi.hole`.
 - **HAR files contain cookies and session tokens.** Never share them or attach them to issues.
 

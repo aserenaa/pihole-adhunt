@@ -4,7 +4,7 @@ Thanks for helping make adhunt better!
 
 ## Setup
 
-adhunt uses [pnpm](https://pnpm.io) (not npm or yarn) and Node.js 20.12 or newer.
+adhunt uses [pnpm](https://pnpm.io) (not npm or yarn) and Node.js 22 or newer.
 
 ```bash
 pnpm install

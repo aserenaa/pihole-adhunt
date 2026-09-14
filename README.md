@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/aserenaa/pihole-adhunt/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/aserenaa/pihole-adhunt/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Node" src="https://img.shields.io/badge/node-%E2%89%A520.12-339933?logo=node.js&logoColor=white">
+  <img alt="Node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white">
   <img alt="Pi-hole" src="https://img.shields.io/badge/Pi--hole-v6-96060C?logo=pi-hole&logoColor=white">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
@@ -90,7 +90,7 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 ## Requirements
 
 - **Pi-hole v6** or newer and its **app password**
-- **Node.js 20.12+** and **[pnpm](https://pnpm.io/installation)**
+- **Node.js 22+** and **[pnpm](https://pnpm.io/installation)**
 - **Google Chrome** or **Microsoft Edge** (or let Playwright download Chromium)
 
 ## Installation

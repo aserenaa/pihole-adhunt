@@ -236,7 +236,7 @@ adhunt uses the REST API introduced in Pi-hole v6. Check that `PIHOLE_URL` (or t
 
 ```bash
 pnpm install
-pnpm test          # node:test — no browser required
+pnpm test          # node:test; the capture test is skipped when no Chrome, Edge or Chromium is installed
 pnpm lint          # Biome
 ```
 

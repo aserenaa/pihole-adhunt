@@ -101,7 +101,7 @@ test("actions: block selected, block recommended, nothing, cancel", () => {
 	);
 	assert.deepEqual(run(marked, 10).result, []);
 	assert.equal(run(marked, 1, "escape").action, "cancel");
-	assert.deepEqual(run(marked, 1, "c", { ctrl: true }).result, []);
+	assert.equal(run(marked, 1, "c", { ctrl: true }).action, "interrupt");
 	assert.equal(
 		run(marked, 8, "space").state.cursor,
 		8,
@@ -183,4 +183,15 @@ test("selectCandidates reads arrow keys from the terminal", async () => {
 	);
 	assert.ok(output.includes("\u001b[?25h"), "cursor shown again");
 	assert.match(output, /\[x\] ads\.example[^\n]*\n {2}\[ \] track\.example/);
+});
+
+test("Ctrl+C in the menu cancels like in any other prompt", async () => {
+	const stdin = new PassThrough();
+	stdin.isTTY = true;
+	stdin.setRawMode = () => stdin;
+	const stdout = new PassThrough();
+	stdout.resume();
+	const picked = selectCandidates({ candidates }, { stdin, stdout });
+	stdin.write("\u0003");
+	await assert.rejects(picked, /Cancelled/);
 });

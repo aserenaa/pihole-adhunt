@@ -66,8 +66,8 @@ export function initialState(rows) {
 }
 
 /**
- * Applies a keypress → { state } to keep going, or { action, result } with the
- * candidates to block (empty for "nothing" or a cancel).
+ * Applies a keypress → { state } to keep going, or { action, result } with the candidates
+ * to block (empty for "nothing", "cancel" from Esc or q, and "interrupt" from Ctrl+C).
  */
 export function onKey(rows, state, key = {}) {
 	const items = itemsOf(rows);
@@ -81,7 +81,7 @@ export function onKey(rows, state, key = {}) {
 		while (!selectable(rows[i]));
 		return { state: { ...state, cursor: i } };
 	};
-	if (key.ctrl && key.name === "c") return finish("cancel", new Set());
+	if (key.ctrl && key.name === "c") return finish("interrupt", new Set());
 	if (key.ctrl || key.meta) return { state };
 
 	const row = rows[state.cursor];
@@ -355,6 +355,7 @@ export function selectCandidates(
 			}
 			// Stop listening right away; restoring the terminal takes a tick.
 			cleanup().then(() => {
+				if (next.action === "interrupt") return reject(new Error("Cancelled."));
 				const final = renderFinal(rows, next.result, {
 					columns: stdout.columns,
 					style,

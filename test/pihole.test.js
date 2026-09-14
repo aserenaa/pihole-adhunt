@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { test } from "node:test";
 
-import { dnsAnswerStatus } from "../src/pihole.js";
+import { dnsAnswerStatus, PiHole } from "../src/pihole.js";
+
+/** Runs fn against a local HTTP server that answers every request with handler(req, res). */
+async function withServer(handler, fn) {
+	const server = createServer(handler);
+	await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		return await fn(`http://127.0.0.1:${server.address().port}`);
+	} finally {
+		server.close();
+	}
+}
 
 const PIHOLE = "192.0.2.53";
 const answer = (...addresses) => ({ addresses });
@@ -51,4 +63,44 @@ test("0.0.0.0 counts as blocked in any mode; resolver failures are errors", () =
 		"error",
 	);
 	assert.equal(dnsAnswerStatus(answer("0.0.0.0")), "blocked");
+});
+
+test("login: Pi-hole v5 (no /api/auth) asks for v6", async () => {
+	const html = (status) => (_req, res) => {
+		res.writeHead(status, { "content-type": "text/html" });
+		res.end("<html>Pi-hole admin</html>");
+	};
+	for (const status of [404, 200]) {
+		await withServer(html(status), (url) =>
+			assert.rejects(
+				new PiHole({ url, password: "x" }).login(),
+				/v6 or newer is required/,
+			),
+		);
+	}
+});
+
+test("login: v6 session and wrong password", async () => {
+	await withServer(
+		(req, res) => {
+			let body = "";
+			req.on("data", (chunk) => (body += chunk));
+			req.on("end", () => {
+				const ok = JSON.parse(body).password === "right";
+				res.writeHead(ok ? 200 : 401, { "content-type": "application/json" });
+				res.end(
+					JSON.stringify({ session: { valid: ok, sid: ok ? "sid123" : null } }),
+				);
+			});
+		},
+		async (url) => {
+			const ph = new PiHole({ url, password: "right" });
+			await ph.login();
+			assert.equal(ph.sid, "sid123");
+			await assert.rejects(
+				new PiHole({ url, password: "wrong" }).login(),
+				/rejected the password/,
+			);
+		},
+	);
 });

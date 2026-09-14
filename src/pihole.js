@@ -51,6 +51,10 @@ export class PiHole {
 	}
 
 	async login() {
+		// Pi-hole v5 has no /api/auth: its web server answers 404, or an HTML page without a session.
+		const v6Required = new Error(
+			`Pi-hole v6 or newer is required (no v6 API at ${this.url}/api/auth). Check the URL, or upgrade with "pihole -up".`,
+		);
 		const data = await this.request("POST", "/api/auth", {
 			password: this.password,
 		}).catch((e) => {
@@ -58,9 +62,11 @@ export class PiHole {
 				throw new Error(
 					"Pi-hole rejected the password (use the app password: Settings → Web interface / API).",
 				);
+			if (e.status === 404 || e.status === 405) throw v6Required;
 			throw e;
 		});
-		if (!data?.session?.valid)
+		if (!data?.session) throw v6Required;
+		if (!data.session.valid)
 			throw new Error(
 				"Pi-hole did not open a session (is the password correct?).",
 			);

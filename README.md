@@ -194,6 +194,12 @@ Your corepack-managed pnpm is broken. Run `corepack disable pnpm` and install pn
 Install Google Chrome, or run `pnpm exec playwright-core install chromium`.
 </details>
 
+<details>
+<summary><code>Pi-hole v6 or newer is required</code></summary>
+
+adhunt uses the REST API introduced in Pi-hole v6. Check that `PIHOLE_URL` (or the URL from `adhunt setup`) points at your Pi-hole, or upgrade with `pihole -up`.
+</details>
+
 ## Development
 
 ```bash

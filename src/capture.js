@@ -109,7 +109,7 @@ function frameSourceUrl(frame) {
 
 /**
  * Opens the page in a headless browser and records every network request.
- * → { requestedUrl, finalUrl, title, browser, requests: [{ url, type, sourceUrl, initiatorUrl, popup, failed }], popups, redirects }
+ * → { requestedUrl, finalUrl, title, browser, requests: [{ url, type, sourceUrl, initiatorUrl, popup }], popups, redirects }
  */
 export async function capture(
 	url,
@@ -160,7 +160,6 @@ export async function capture(
 			});
 		} catch {}
 
-		const byRequest = new WeakMap();
 		context.on("request", (req) => {
 			let sourceUrl = "";
 			let type = req.resourceType();
@@ -176,20 +175,13 @@ export async function capture(
 					sourceUrl = frameSourceUrl(frame);
 				}
 			} catch {} // service worker requests have no frame
-			const entry = {
+			out.requests.push({
 				url: req.url(),
 				type,
 				sourceUrl,
 				initiatorUrl: req.redirectedFrom()?.url() || "",
 				popup,
-				failed: false,
-			};
-			byRequest.set(req, entry);
-			out.requests.push(entry);
-		});
-		context.on("requestfailed", (req) => {
-			const entry = byRequest.get(req);
-			if (entry) entry.failed = req.failure()?.errorText || true;
+			});
 		});
 		context.on("page", (p) => {
 			if (p === page) return;
@@ -291,7 +283,6 @@ export async function fromHar(path) {
 			sourceUrl: pageUrl,
 			initiatorUrl: initiatorUrl(e._initiator),
 			popup: false,
-			failed: e.response?.status === 0,
 		})),
 	};
 }

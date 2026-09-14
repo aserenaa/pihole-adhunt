@@ -215,7 +215,6 @@ async function applyBlock(scan, selected, cfg, opts) {
 	const password = await requirePassword();
 	const date = new Date().toLocaleDateString("sv"); // YYYY-MM-DD in local time
 	const batch = {
-		id: Date.now().toString(36),
 		at: new Date().toISOString(),
 		site: scan.site,
 		items: [],

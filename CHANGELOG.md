@@ -24,4 +24,13 @@ All notable changes to this project are documented here. The format follows
 - Warnings for plain-HTTP Pi-hole URLs outside the local network and for Pi-hole versions older
   than v6.
 
+### Security
+
+- The Pi-hole password is read from the OS keychain or `PIHOLE_PASSWORD`, typed without echo, never
+  passed to the browser, and never sent after a redirect.
+- Scanned pages run in the browser sandbox; text they provide is stripped of control characters
+  before it reaches the terminal.
+- Config and state files are readable only by the current user on macOS and Linux.
+- Filter list downloads that fail or return an HTTP error are rejected instead of cached.
+
 [Unreleased]: https://github.com/aserenaa/pihole-adhunt/commits/main

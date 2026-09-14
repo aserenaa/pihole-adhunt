@@ -103,8 +103,8 @@ pnpm add --global .     # makes the `adhunt` command available (a link: git pull
 adhunt setup            # Pi-hole URL + app password (stored in your OS keychain)
 ```
 
-`adhunt setup` asks for the password without echoing it, checks that it works, and only then
-stores it. Without a keychain (for example on a headless Linux server), set `PIHOLE_PASSWORD` instead.
+`adhunt setup` asks for the Pi-hole address (pasting the web interface URL, `/admin` included, works)
+and the password without echoing it, checks that both work, and only then saves them. Without a keychain (for example on a headless Linux server), set `PIHOLE_PASSWORD` instead.
 
 <details>
 <summary><strong>Windows (PowerShell)</strong></summary>

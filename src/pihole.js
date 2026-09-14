@@ -63,6 +63,8 @@ export class PiHole {
 					...(this.sid && { "X-FTL-SID": this.sid }),
 				},
 				body: body && JSON.stringify(body),
+				// Never follow a redirect: it would re-send the password or session to another URL.
+				redirect: "manual",
 				signal: AbortSignal.timeout(15000),
 			});
 		} catch (e) {
@@ -70,6 +72,10 @@ export class PiHole {
 				`Could not connect to Pi-hole at ${this.url} (${e.cause?.code || e.name}). Is it reachable from this computer?`,
 			);
 		}
+		if (res.status >= 300 && res.status < 400)
+			throw new Error(
+				`Pi-hole at ${this.url} redirects to ${res.headers.get("location") || "another address"}. Use that address as the Pi-hole URL.`,
+			);
 		if (res.status === 204) return null;
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) {

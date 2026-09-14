@@ -179,3 +179,25 @@ test("DNS server with an optional port (e.g. Docker mapping 1053:53)", () => {
 		port: 53,
 	});
 });
+
+test("a redirect never receives the password", async () => {
+	let forwarded = false;
+	await withServer(
+		(_req, res) => {
+			forwarded = true;
+			res.end("{}");
+		},
+		(elsewhere) =>
+			withServer(
+				(_req, res) =>
+					res.writeHead(307, { location: `${elsewhere}/api/auth` }).end(),
+				async (url) => {
+					await assert.rejects(
+						new PiHole({ url, password: "secret" }).login(),
+						/redirects to http:\/\/127\.0\.0\.1:\d+\/api\/auth\. Use that address/,
+					);
+					assert.equal(forwarded, false);
+				},
+			),
+	);
+});

@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { isIP } from "node:net";
 import { dirname, join } from "node:path";
@@ -19,20 +19,52 @@ const BLOCK_CATEGORIES = new Set([
 const AD_CATEGORIES = new Set(["advertising", "pornvertising"]);
 const GROUP_ORDER = { block: 0, review: 1, unknown: 2 };
 
-/** EasyList+EasyPrivacy+uBO engine (Ghostery's prebuilt build, cached for 3 days) and TrackerDB. */
-export async function loadEngines(cacheDir) {
+/** A fetch that fails on HTTP errors, so an error or captive-portal page is never parsed as a list. */
+export const checkedFetch = (fetchImpl) => async (url, init) => {
+	const res = await fetchImpl(url, init);
+	if (!res.ok) throw new Error(`${url} answered HTTP ${res.status}`);
+	return res;
+};
+
+/**
+ * Filter engine and TrackerDB. The engine is compiled from EasyList, EasyPrivacy, uBlock Origin
+ * and Peter Lowe's lists, downloaded from Ghostery's adblocker repository and cached for 3 days.
+ * When a refresh fails (offline, rate limited), the older cached engine is used with a warning.
+ */
+export async function loadEngines(
+	cacheDir,
+	{ fetch: fetchImpl = fetch, log = () => {} } = {},
+) {
 	await mkdir(cacheDir, { recursive: true });
-	const path = join(cacheDir, `ghostery-ads-tracking.bin`);
+	const path = join(cacheDir, "ghostery-ads-tracking.bin");
 	const age = await stat(path).then(
 		(s) => Date.now() - s.mtimeMs,
-		() => Infinity,
+		() => Number.POSITIVE_INFINITY,
 	);
-	if (age > ENGINE_MAX_AGE_MS) await unlink(path).catch(() => {});
-	const engine = await FiltersEngine.fromPrebuiltAdsAndTracking(fetch, {
-		path,
-		read: readFile,
-		write: writeFile,
-	});
+	const stale = age > ENGINE_MAX_AGE_MS;
+	let engine;
+	try {
+		engine = await FiltersEngine.fromPrebuiltAdsAndTracking(
+			checkedFetch(fetchImpl),
+			stale ? undefined : { path, read: readFile, write: writeFile },
+		);
+		if (stale) await writeFile(path, engine.serialize());
+	} catch (e) {
+		const reason = e.cause?.code || e.message;
+		const old =
+			age !== Number.POSITIVE_INFINITY &&
+			(await readFile(path)
+				.then((buffer) => FiltersEngine.deserialize(buffer))
+				.catch(() => null));
+		if (!old)
+			throw new Error(
+				`Could not download the filter lists (${reason}). Check the internet connection.`,
+			);
+		log(
+			`could not refresh the filter lists (${reason}); using the ones from ${Math.round(age / 86_400_000)} day(s) ago`,
+		);
+		engine = old;
+	}
 	const require = createRequire(import.meta.url);
 	const tdbFile = join(
 		dirname(require.resolve("@ghostery/trackerdb")),

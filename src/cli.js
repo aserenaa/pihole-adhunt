@@ -273,7 +273,7 @@ async function cmdScan(url, opts, cfg) {
 		password = readPassword();
 	}
 	note("loading EasyList/EasyPrivacy + TrackerDB…");
-	const engines = await loadEngines(CACHE_DIR);
+	const engines = await loadEngines(CACHE_DIR, { log: warn });
 	const cap = opts.har
 		? await fromHar(opts.har)
 		: await capture(url, {
@@ -491,7 +491,7 @@ async function cmdDevice(ip, opts, cfg) {
 	);
 	if (!counts.size) return say("No allowed queries in that time range.");
 	note("loading EasyList/EasyPrivacy + TrackerDB…");
-	const engines = await loadEngines(CACHE_DIR);
+	const engines = await loadEngines(CACHE_DIR, { log: warn });
 	// No real URL: probe the domain as a script/image/xhr/iframe loaded by a third-party site.
 	const requests = [...counts].map(([d, n]) => ({
 		url: `https://${d}/`,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, test } from "node:test";
@@ -8,6 +9,7 @@ import { NetworkFilter } from "@ghostery/adblocker";
 
 import {
 	analyze,
+	checkedFetch,
 	finalize,
 	hostLevelTarget,
 	loadEngines,
@@ -173,4 +175,34 @@ test("IP addresses are never proposed: Pi-hole only blocks names", () => {
 	);
 	assert.deepEqual(r.candidates, []);
 	assert.equal(r.hostCount, 0);
+});
+
+test("filter list downloads: HTTP errors fail, and an old engine is the fallback", async (t) => {
+	const failing = async () => new Response("rate limited", { status: 429 });
+	await assert.rejects(
+		checkedFetch(failing)("https://lists.example/easylist.txt"),
+		/HTTP 429/,
+	);
+
+	const dir = await mkdtemp(join(tmpdir(), "adhunt-engine-"));
+	t.after(() => rm(dir, { recursive: true, force: true }));
+	await assert.rejects(
+		loadEngines(dir, { fetch: failing }),
+		/Could not download the filter lists/,
+	);
+
+	const cached = join(dir, "ghostery-ads-tracking.bin");
+	await writeFile(cached, engines.engine.serialize());
+	const fiveDaysAgo = new Date(Date.now() - 5 * 86_400_000);
+	await utimes(cached, fiveDaysAgo, fiveDaysAgo);
+	const warnings = [];
+	const fallback = await loadEngines(dir, {
+		fetch: failing,
+		log: (msg) => warnings.push(msg),
+	});
+	assert.ok(fallback.engine);
+	assert.match(
+		warnings[0],
+		/could not refresh the filter lists .*5 day\(s\) ago/,
+	);
 });

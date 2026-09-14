@@ -230,3 +230,23 @@ test("setup saves a normalized URL only after logging in", async (t) => {
 		piholeUrl: pihole.url,
 	});
 });
+
+test("a Pi-hole DNS that doesn't answer is reported", async (t) => {
+	pihole = await fakePihole();
+	t.after(pihole.close);
+	// A UDP socket that never replies stands in for DNS served somewhere else.
+	const silent = createSocket("udp4");
+	await new Promise((resolve) => silent.bind(0, "127.0.0.1", resolve));
+	t.after(() => silent.close());
+	const scan = await adhuntWith(
+		{ env: { PIHOLE_DNS: `127.0.0.1:${silent.address().port}` } },
+		"--har",
+		HAR,
+		"--json",
+	);
+	assert.equal(scan.code, 0, scan.stderr);
+	assert.match(
+		scan.stderr,
+		/DNS at 127\.0\.0\.1:\d+ did not answer.*set PIHOLE_DNS/,
+	);
+});

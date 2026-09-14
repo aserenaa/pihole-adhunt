@@ -196,6 +196,16 @@ function blockingChecker(cfg, blocking) {
 	return makeDnsChecker(cfg, blocking);
 }
 
+/** Asks Pi-hole's DNS about hosts → Map host → status, warning when it answers none of them. */
+async function checkHosts(dns, hosts) {
+	const states = await dns.many(hosts);
+	if (states.size && [...states.values()].every((s) => s === "error"))
+		warn(
+			`Pi-hole's DNS at ${dns.server} did not answer, so blocked domains can't be detected. If Pi-hole serves DNS on another address or port, set PIHOLE_DNS (for example 192.0.2.53:1053).`,
+		);
+	return states;
+}
+
 async function applyBlock(scan, selected, cfg, opts) {
 	if (!selected.length) return say("Nothing selected.");
 	requireUrl(cfg);
@@ -251,7 +261,10 @@ async function applyBlock(scan, selected, cfg, opts) {
 	// Pi-hole reloads its lists in the background: verify via DNS after a moment.
 	await new Promise((r) => setTimeout(r, 2000));
 	const dns = await blockingChecker(cfg, blocking);
-	const states = await dns.many(batch.items.map((i) => i.probe));
+	const states = await checkHosts(
+		dns,
+		batch.items.map((i) => i.probe),
+	);
 	const ok = batch.items.filter(
 		(i) => states.get(i.probe) === "blocked",
 	).length;
@@ -299,7 +312,10 @@ async function cmdScan(url, opts, cfg) {
 		note("classifying and querying Pi-hole's DNS…");
 		blocking = await session(cfg, password, (ph) => ph.blocking());
 		const dns = await blockingChecker(cfg, blocking);
-		dnsStatus = await dns.many(result.candidates.flatMap((x) => x.hosts));
+		dnsStatus = await checkHosts(
+			dns,
+			result.candidates.flatMap((x) => x.hosts),
+		);
 	} else {
 		note("no Pi-hole URL or password: skipping the already-blocked check");
 	}
@@ -516,7 +532,10 @@ async function cmdDevice(ip, opts, cfg) {
 		blockingMode: blocking.mode,
 		...finalize(
 			result,
-			await dns.many(result.candidates.flatMap((x) => x.hosts)),
+			await checkHosts(
+				dns,
+				result.candidates.flatMap((x) => x.hosts),
+			),
 		),
 	};
 	await saveLastScan(scan);

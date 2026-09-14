@@ -23,7 +23,7 @@ getting past your Pi-hole. You pick what to block; adhunt adds it through the Pi
 you can list or undo it later.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="adhunt scanning a news site, listing the ad and tracker domains that get past Pi-hole, and blocking the recommended ones" width="820">
+  <img src="docs/demo.gif" alt="adhunt scanning a news site, then choosing with the arrow keys which ad and tracker domains to block in Pi-hole" width="820">
 </p>
 
 <details>

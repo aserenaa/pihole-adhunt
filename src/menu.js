@@ -5,7 +5,7 @@ import {
 	moveCursor,
 } from "node:readline";
 
-import { restoreTerminal } from "./credentials.js";
+import { restoreTerminal } from "./terminal.js";
 
 const GROUP_TITLES = {
 	block: "🔴 BLOCK",
@@ -334,31 +334,33 @@ export function selectCandidates(
 	};
 
 	return new Promise((resolve, reject) => {
-		const cleanup = () => {
+		const cleanup = async () => {
 			stdin.off("keypress", onKeypress);
 			stdout.off?.("resize", draw);
-			restoreTerminal(stdin);
 			clear();
 			stdout.write(SHOW_CURSOR);
+			await restoreTerminal(stdin);
 		};
 		const onKeypress = (_text, key) => {
+			let next;
 			try {
-				const next = onKey(rows, state, key);
+				next = onKey(rows, state, key);
 				if (!next.result) {
 					state = next.state;
 					return draw();
 				}
-				cleanup();
+			} catch (e) {
+				return cleanup().then(() => reject(e), reject);
+			}
+			// Stop listening right away; restoring the terminal takes a tick.
+			cleanup().then(() => {
 				const final = renderFinal(rows, next.result, {
 					columns: stdout.columns,
 					style,
 				});
 				stdout.write(`${final.join("\n")}\n`);
 				resolve(next.result);
-			} catch (e) {
-				cleanup();
-				reject(e);
-			}
+			}, reject);
 		};
 		emitKeypressEvents(stdin);
 		stdin.setRawMode(true);

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { isIP } from "node:net";
-import { createInterface } from "node:readline/promises";
 import { parseArgs, styleText } from "node:util";
 
 import { analyze, finalize, loadEngines } from "./analyze.js";
@@ -9,7 +8,6 @@ import { CACHE_DIR, loadConfig, saveConfig } from "./config.js";
 import {
 	forgetPassword,
 	keychainName,
-	promptHidden,
 	readPassword,
 	savePassword,
 	storedPassword,
@@ -31,6 +29,7 @@ import {
 	saveHistory,
 	saveLastScan,
 } from "./state.js";
+import { exitWhenFlushed, prompt } from "./terminal.js";
 
 const LOCAL_NAMES = /\.(lan|local|localdomain|home|internal|arpa|ts\.net)$/;
 
@@ -302,20 +301,15 @@ async function cmdScan(url, opts, cfg) {
 
 /** Typed selection, for terminals that can't draw the menu (TERM=dumb, screen readers). */
 async function askTyped(scan, rec) {
-	const rl = createInterface({ input: process.stdin, output: process.stdout });
-	try {
-		for (;;) {
-			const ans = await rl.question(
-				`\nBlock which? ${c("dim", `[r = recommended (${rec.map((x) => x.n).join(" ") || "—"}) · numbers: 1 3 5-7 · r 9 · Enter = nothing]`)} `,
-			);
-			try {
-				return parseSelection([ans], scan);
-			} catch (e) {
-				say(c("yellow", e.message));
-			}
+	for (;;) {
+		const ans = await prompt(
+			`\nBlock which? ${c("dim", `[r = recommended (${rec.map((x) => x.n).join(" ") || "—"}) · numbers: 1 3 5-7 · r 9 · Enter = nothing]`)} `,
+		);
+		try {
+			return parseSelection([ans], scan);
+		} catch (e) {
+			say(c("yellow", e.message));
 		}
-	} finally {
-		rl.close();
 	}
 }
 
@@ -516,21 +510,15 @@ async function cmdDevice(ip, opts, cfg) {
 }
 
 async function cmdSetup(cfg) {
-	const rl = createInterface({ input: process.stdin, output: process.stdout });
-	try {
-		const current = cfg.piholeUrl || "http://pi.hole";
-		const url =
-			(await rl.question(`Pi-hole URL [${current}]: `)).trim() || current;
-		cfg.piholeUrl = (url.includes("://") ? url : `http://${url}`).replace(
-			/\/+$/,
-			"",
-		);
-		say(
-			`Config saved to ${await saveConfig({ piholeUrl: cfg.piholeUrl, dnsServer: cfg.dnsServer })}`,
-		);
-	} finally {
-		rl.close();
-	}
+	const current = cfg.piholeUrl || "http://pi.hole";
+	const url = (await prompt(`Pi-hole URL [${current}]: `)).trim() || current;
+	cfg.piholeUrl = (url.includes("://") ? url : `http://${url}`).replace(
+		/\/+$/,
+		"",
+	);
+	say(
+		`Config saved to ${await saveConfig({ piholeUrl: cfg.piholeUrl, dnsServer: cfg.dnsServer })}`,
+	);
 
 	let password = process.env.PIHOLE_PASSWORD;
 	const stored = password ? null : storedPassword();
@@ -541,8 +529,9 @@ async function cmdSetup(cfg) {
 			"Pi-hole app password (Settings → Web interface / API → Configure app password).",
 		);
 		password =
-			(await promptHidden(
+			(await prompt(
 				stored ? "Password (Enter keeps the stored one): " : "Password: ",
+				{ hidden: true },
 			)) || stored;
 		if (!password) throw new Error("No password entered.");
 	}
@@ -626,7 +615,10 @@ async function main() {
 	}
 }
 
-main().catch((e) => {
-	console.error(c("red", `✗ ${e.message}`));
-	process.exit(1);
-});
+main().then(
+	() => exitWhenFlushed(0),
+	(e) => {
+		console.error(c("red", `✗ ${e.message}`));
+		exitWhenFlushed(1);
+	},
+);

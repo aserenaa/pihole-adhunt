@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a security vulnerability
-    url: https://github.com/aserenaa/pihole-adhunt/security/advisories/new
+    url: https://github.com/aserenaa/adhunt/security/advisories/new
     about: Please report vulnerabilities privately, not as public issues.

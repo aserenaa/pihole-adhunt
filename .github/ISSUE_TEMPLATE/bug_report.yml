@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         **Never paste HAR files, Pi-hole passwords, query logs, IP addresses or hostnames from your network.**
-        Replace real domains you'd rather not share with `example.com`. Security issues go through [private reporting](https://github.com/aserenaa/pihole-adhunt/security/advisories/new) instead.
+        Replace real domains you'd rather not share with `example.com`. Security issues go through [private reporting](https://github.com/aserenaa/adhunt/security/advisories/new) instead.
   - type: textarea
     id: what
     attributes:

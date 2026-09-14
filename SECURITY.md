@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately through
-[GitHub's private vulnerability reporting](https://github.com/aserenaa/pihole-adhunt/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/aserenaa/adhunt/security/advisories/new)
 (**Security → Report a vulnerability**). Do not open a public issue.
 
 Include the adhunt commit, your OS, Node.js and Pi-hole versions, and the steps to reproduce.

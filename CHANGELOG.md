@@ -38,5 +38,5 @@ First public release.
 - Config and state files are readable only by the current user on macOS and Linux.
 - Filter list downloads that fail or return an HTTP error are rejected instead of cached.
 
-[Unreleased]: https://github.com/aserenaa/pihole-adhunt/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/aserenaa/pihole-adhunt/releases/tag/v1.0.0
+[Unreleased]: https://github.com/aserenaa/adhunt/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/aserenaa/adhunt/releases/tag/v1.0.0

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aserenaa/pihole-adhunt/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/aserenaa/pihole-adhunt/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/aserenaa/adhunt/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/aserenaa/adhunt/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white">
   <img alt="Works with Pi-hole v6" src="https://img.shields.io/badge/works%20with-Pi--hole%20v6-96060C">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey">
@@ -96,8 +96,8 @@ Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.
 ## Installation
 
 ```bash
-git clone https://github.com/aserenaa/pihole-adhunt.git
-cd pihole-adhunt
+git clone https://github.com/aserenaa/adhunt.git
+cd adhunt
 pnpm install
 pnpm add --global .     # makes the `adhunt` command available (a link: git pull updates it)
 adhunt setup            # Pi-hole URL + app password (stored in your OS keychain)
@@ -112,8 +112,8 @@ and the password without echoing it, checks that both work, and only then saves 
 ```powershell
 winget install OpenJS.NodeJS.LTS
 winget install pnpm.pnpm
-git clone https://github.com/aserenaa/pihole-adhunt.git
-cd pihole-adhunt
+git clone https://github.com/aserenaa/adhunt.git
+cd adhunt
 pnpm install
 pnpm setup               # adds pnpm's global bin folder to PATH, then restart the terminal
 pnpm add --global .
@@ -235,7 +235,7 @@ See [SECURITY.md](SECURITY.md) for what adhunt stores and how to report a vulner
 <details>
 <summary><code>adhunt: command not found</code></summary>
 
-Run `pnpm setup`, restart the terminal, then run `pnpm add --global .` again from the adhunt folder — or run it directly with `node path/to/pihole-adhunt/src/cli.js`. pnpm 12 no longer accepts `pnpm link --global`. To uninstall the command, run `pnpm remove --global pihole-adhunt`.
+Run `pnpm setup`, restart the terminal, then run `pnpm add --global .` again from the adhunt folder — or run it directly with `node path/to/adhunt/src/cli.js`. pnpm 12 no longer accepts `pnpm link --global`. To uninstall the command, run `pnpm remove --global adhunt`.
 </details>
 
 <details>

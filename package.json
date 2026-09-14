@@ -1,5 +1,5 @@
 {
-	"name": "pihole-adhunt",
+	"name": "adhunt",
 	"version": "1.0.0",
 	"description": "Find the ad and tracker domains a web page loads and block them in Pi-hole",
 	"keywords": [
@@ -11,13 +11,13 @@
 		"cli",
 		"playwright"
 	],
-	"homepage": "https://github.com/aserenaa/pihole-adhunt#readme",
+	"homepage": "https://github.com/aserenaa/adhunt#readme",
 	"bugs": {
-		"url": "https://github.com/aserenaa/pihole-adhunt/issues"
+		"url": "https://github.com/aserenaa/adhunt/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/aserenaa/pihole-adhunt.git"
+		"url": "git+https://github.com/aserenaa/adhunt.git"
 	},
 	"license": "MIT",
 	"author": "aserenaa",

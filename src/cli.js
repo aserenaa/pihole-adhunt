@@ -201,38 +201,45 @@ async function applyBlock(scan, selected, cfg, opts) {
 		items: [],
 	};
 	say("");
-	const blocking = await session(cfg, password, async (ph) => {
-		const group = opts.group && findGroup(await ph.groups(), opts.group);
-		if (group) say(c("dim", `  group: ${group.name}`));
-		for (const cand of selected) {
-			const domain =
-				cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
-			const comment = ["adhunt", scan.site, date, cand.label]
-				.filter(Boolean)
-				.join(" · ");
-			const res = await ph.addDeny(cand.kind, domain, comment, [
-				group ? group.id : 0,
-			]);
-			if (res.ok) {
-				batch.items.push({
-					kind: cand.kind,
-					domain,
-					target: cand.target,
-					probe: cand.hosts[0],
-				});
-				say(`  ${c("green", "＋")} ${shown(cand)}`);
-			} else {
-				say(
-					`  ${c("yellow", "=")} ${shown(cand)} ${c("dim", res.exists ? "(already on the list)" : res.error)}`,
-				);
+	let blocking;
+	try {
+		blocking = await session(cfg, password, async (ph) => {
+			const group = opts.group && findGroup(await ph.groups(), opts.group);
+			if (group) say(c("dim", `  group: ${group.name}`));
+			for (const cand of selected) {
+				const domain =
+					cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
+				const comment = ["adhunt", scan.site, date, cand.label]
+					.filter(Boolean)
+					.join(" · ");
+				const res = await ph.addDeny(cand.kind, domain, comment, [
+					group ? group.id : 0,
+				]);
+				if (res.ok) {
+					batch.items.push({
+						kind: cand.kind,
+						domain,
+						target: cand.target,
+						probe: cand.hosts[0],
+					});
+					say(`  ${c("green", "＋")} ${shown(cand)}`);
+				} else {
+					say(
+						`  ${c("yellow", "=")} ${shown(cand)} ${c("dim", res.exists ? "(already on the list)" : res.error)}`,
+					);
+				}
 			}
+			return ph.blocking();
+		});
+	} finally {
+		// Record what was added even when a later add fails, so `undo` removes this batch.
+		if (batch.items.length) {
+			const history = await loadHistory();
+			history.push(batch);
+			await saveHistory(history);
 		}
-		return ph.blocking();
-	});
+	}
 	if (!batch.items.length) return;
-	const history = await loadHistory();
-	history.push(batch);
-	await saveHistory(history);
 
 	// Pi-hole reloads its lists in the background: verify via DNS after a moment.
 	await new Promise((r) => setTimeout(r, 2000));

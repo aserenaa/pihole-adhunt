@@ -1,0 +1,15 @@
+node_modules/
+.cache/
+coverage/
+*.log
+
+# Secrets and local environment
+.env*
+
+# HAR files contain cookies and session tokens; only synthetic fixtures are tracked
+*.har
+!test/fixtures/*.har
+
+# OS files
+.DS_Store
+Thumbs.db

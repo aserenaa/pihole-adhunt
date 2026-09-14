@@ -1,0 +1,550 @@
+#!/usr/bin/env node
+import { isIP } from "node:net";
+import { createInterface } from "node:readline/promises";
+import { parseArgs, styleText } from "node:util";
+
+import { analyze, finalize, loadEngines } from "./analyze.js";
+import { capture, fromHar } from "./capture.js";
+import {
+	CACHE_DIR,
+	getPassword,
+	loadConfig,
+	saveConfig,
+	storePassword,
+} from "./config.js";
+import {
+	fromWildcard,
+	isBlockedStatus,
+	makeDnsChecker,
+	toWildcard,
+	withPiHole,
+} from "./pihole.js";
+import {
+	loadHistory,
+	loadLastScan,
+	saveHistory,
+	saveLastScan,
+} from "./state.js";
+
+const LOCAL_NAMES = /\.(lan|local|localdomain|home|internal|arpa|ts\.net)$/;
+
+const tty = process.stdout.isTTY;
+const c = (style, text) =>
+	tty ? styleText(style, String(text)) : String(text);
+const say = (...a) => console.log(...a);
+const note = (msg) => process.stderr.write(c("dim", `  · ${msg}\n`));
+
+const HELP = `adhunt — find the ad domains a page loads and block them in Pi-hole
+
+Usage:
+  adhunt <url> [options]             scan a page (shortcut for "scan")
+  adhunt scan <url> [options]
+  adhunt block <selection>           block from the last scan: r (recommended), 1 3 5-7
+  adhunt undo                        undo the last block
+  adhunt list                        everything adhunt added to Pi-hole
+  adhunt remove <domain>             remove a domain added by adhunt
+  adhunt device <ip> [--minutes 15]  analyze what a device asked for (Pi-hole query log)
+  adhunt clients                     devices with the most queries (to find an IP)
+  adhunt setup                       set the Pi-hole URL and store the password in the Keychain
+
+Scan options:
+  -m, --mobile      emulate an iPhone (sites serve different ads on mobile)
+  -w, --wait <s>    seconds to scroll while waiting for ads (default 20)
+      --click       click the page to detect pop-ups/pop-unders
+      --headed      show the browser (useful when a site detects bots)
+      --har <file>  analyze a .har exported from DevTools instead of opening a browser
+  -y, --yes         block the recommended entries without asking
+      --json        print the result as JSON
+`;
+
+const GROUPS = {
+	block: {
+		title: "🔴 BLOCK — ads/trackers with a full-domain EasyList rule",
+		color: "red",
+	},
+	review: {
+		title: "🟠 REVIEW — likely ads, but blocking may break something",
+		color: "yellow",
+	},
+	unknown: {
+		title:
+			"🟡 UNKNOWN — third parties with no matching rule (check whether any look like ads)",
+		color: "dim",
+	},
+};
+
+const shown = (cand) =>
+	cand.kind === "regex"
+		? `${cand.target} ${c("dim", "(+subdomains)")}`
+		: cand.target;
+const short = (list, n = 6) =>
+	list.length > n
+		? `${list.slice(0, n).join(", ")} … +${list.length - n}`
+		: list.join(", ");
+
+function printReport(scan) {
+	say("");
+	say(c("bold", `adhunt · ${scan.finalUrl || scan.site}`));
+	say(
+		c(
+			"dim",
+			`  ${scan.title ? `${scan.title.slice(0, 70)} · ` : ""}${scan.browser} · ${scan.requestCount} requests · ${scan.hostCount} domains`,
+		),
+	);
+	for (const [group, meta] of Object.entries(GROUPS)) {
+		const items = scan.candidates.filter((x) => x.group === group);
+		if (!items.length) continue;
+		say("");
+		say(c("bold", meta.title));
+		const limit = group === "unknown" && scan.mode === "device" ? 30 : Infinity;
+		for (const cand of items.slice(0, limit)) {
+			const mark = cand.preselected ? c("green", "[x]") : "[ ]";
+			const details = [cand.label, `${cand.requests} req`]
+				.filter(Boolean)
+				.join(" · ");
+			say(
+				`  ${mark} ${c("bold", String(cand.n).padStart(2))}  ${shown(cand)}  ${c("dim", details)}`,
+			);
+			if (cand.hosts.length > 1 || cand.hosts[0] !== cand.target)
+				say(c("dim", `           hosts: ${short(cand.hosts)}`));
+			for (const r of cand.reasons) say(c(meta.color, `           ${r}`));
+		}
+		if (items.length > limit)
+			say(c("dim", `           … ${items.length - limit} more (see --json)`));
+	}
+	say("");
+	if (scan.blocked.length)
+		say(
+			`${c("green", "✅ Already blocked by Pi-hole")} (${scan.blocked.length}): ${c("dim", short(scan.blocked, 8))}`,
+		);
+	if (scan.pathOnly.length)
+		say(
+			`ℹ️  Ads served from paths on required domains — not blockable via DNS (${scan.pathOnly.length}): ${c("dim", short(scan.pathOnly.map((p) => p.host)))}`,
+		);
+	const ignored = [
+		scan.firstParty.length && `${scan.firstParty.length} first-party`,
+		scan.safe.length &&
+			`${scan.safe.length} safe infrastructure (${short(scan.safe, 4)})`,
+	].filter(Boolean);
+	if (ignored.length) say(c("dim", `⚪ Ignored: ${ignored.join(" · ")}`));
+	if (scan.dead?.length)
+		say(c("dim", `⚫ Not resolving (dead domains): ${short(scan.dead, 4)}`));
+	if (!scan.candidates.length) say(c("green", "Nothing new to block 🎉"));
+}
+
+/** "r 3 5-7" → candidates. r = recommended. */
+function parseSelection(tokens, scan) {
+	const picked = new Map();
+	for (const tok of tokens.flatMap((t) => t.split(/[\s,]+/)).filter(Boolean)) {
+		if (/^(r|rec|recommended|y|yes)$/i.test(tok)) {
+			for (const x of scan.candidates) if (x.preselected) picked.set(x.n, x);
+		} else if (/^\d+(-\d+)?$/.test(tok)) {
+			const [a, b = a] = tok.split("-").map(Number);
+			for (let n = a; n <= b; n++) {
+				const cand = scan.candidates.find((x) => x.n === n);
+				if (!cand) throw new Error(`There is no number ${n} in the last scan.`);
+				picked.set(n, cand);
+			}
+		} else if (!/^(n|no|none)$/i.test(tok)) {
+			throw new Error(
+				`Didn't understand "${tok}". Use r, numbers (1 3 5-7) or n.`,
+			);
+		}
+	}
+	return [...picked.values()];
+}
+
+function requireUrl(cfg) {
+	if (!cfg.piholeUrl)
+		throw new Error('Run "adhunt setup" first (or set PIHOLE_URL).');
+}
+
+async function requirePassword() {
+	const pw = getPassword();
+	if (!pw)
+		throw new Error(
+			'Missing the Pi-hole app password. Run "adhunt setup" (or set PIHOLE_PASSWORD).',
+		);
+	return pw;
+}
+
+async function applyBlock(scan, selected, cfg) {
+	if (!selected.length) return say("Nothing selected.");
+	requireUrl(cfg);
+	const password = await requirePassword();
+	const date = new Date().toLocaleDateString("sv"); // YYYY-MM-DD in local time
+	const batch = {
+		id: Date.now().toString(36),
+		at: new Date().toISOString(),
+		site: scan.site,
+		items: [],
+	};
+	say("");
+	await withPiHole(cfg, password, async (ph) => {
+		for (const cand of selected) {
+			const domain =
+				cand.kind === "regex" ? toWildcard(cand.target) : cand.target;
+			const comment = ["adhunt", scan.site, date, cand.label]
+				.filter(Boolean)
+				.join(" · ");
+			const res = await ph.addDeny(cand.kind, domain, comment);
+			if (res.ok) {
+				batch.items.push({
+					kind: cand.kind,
+					domain,
+					target: cand.target,
+					probe: cand.hosts[0],
+				});
+				say(`  ${c("green", "＋")} ${shown(cand)}`);
+			} else {
+				say(
+					`  ${c("yellow", "=")} ${shown(cand)} ${c("dim", res.exists ? "(already on the list)" : res.error)}`,
+				);
+			}
+		}
+	});
+	if (!batch.items.length) return;
+	const history = await loadHistory();
+	history.push(batch);
+	await saveHistory(history);
+
+	// Pi-hole reloads its lists in the background: verify via DNS after a moment.
+	await new Promise((r) => setTimeout(r, 2000));
+	const dns = await makeDnsChecker(cfg);
+	const states = await dns.many(batch.items.map((i) => i.probe));
+	const ok = batch.items.filter(
+		(i) => states.get(i.probe) === "blocked",
+	).length;
+	say("");
+	say(
+		`${c("green", `Blocked ${batch.items.length} in Pi-hole`)} · verified via DNS: ${ok}/${batch.items.length}${ok < batch.items.length ? c("dim", " (the rest may take a few seconds)") : ""}`,
+	);
+	say(
+		c(
+			"dim",
+			"Undo with: adhunt undo · Devices may keep cached DNS answers until they expire.",
+		),
+	);
+}
+
+async function cmdScan(url, opts, cfg) {
+	if (!opts.har) {
+		if (!url)
+			throw new Error("Missing the URL. Example: adhunt https://example.com");
+		if (!/^https?:\/\//.test(url)) url = `https://${url}`;
+		requireUrl(cfg);
+	}
+	note("loading EasyList/EasyPrivacy + TrackerDB…");
+	const engines = await loadEngines(CACHE_DIR);
+	const cap = opts.har
+		? await fromHar(opts.har)
+		: await capture(url, {
+				mobile: opts.mobile,
+				wait: Number(opts.wait || 20),
+				click: opts.click,
+				headed: opts.headed,
+				log: note,
+			});
+	if (!cap.requests.length)
+		throw new Error("No requests were captured (did the page load?).");
+	const result = analyze(cap, engines);
+	let dnsStatus = new Map();
+	if (cfg.piholeUrl) {
+		note("classifying and querying Pi-hole's DNS…");
+		const dns = await makeDnsChecker(cfg);
+		dnsStatus = await dns.many(result.candidates.flatMap((x) => x.hosts));
+	} else {
+		note("no Pi-hole configured: skipping the already-blocked check");
+	}
+	const scan = {
+		mode: opts.har ? "har" : "scan",
+		at: new Date().toISOString(),
+		...finalize(result, dnsStatus),
+	};
+	await saveLastScan(scan);
+	await review(scan, opts, cfg);
+}
+
+async function review(scan, opts, cfg) {
+	if (opts.json) return say(JSON.stringify(scan, null, 2));
+	printReport(scan);
+	if (!scan.candidates.length) return;
+	const rec = scan.candidates.filter((x) => x.preselected);
+	if (opts.yes) return applyBlock(scan, rec, cfg);
+	if (!cfg.piholeUrl)
+		return say(
+			c(
+				"dim",
+				'\nTo block any of these, run "adhunt setup" first (or set PIHOLE_URL).',
+			),
+		);
+	if (!process.stdin.isTTY || !tty) {
+		return say(
+			c(
+				"dim",
+				`\nTo block: adhunt block r   (recommended: ${rec.map((x) => x.n).join(" ") || "none"}) · or by number: adhunt block 1 4 7`,
+			),
+		);
+	}
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	let selected;
+	try {
+		for (;;) {
+			const ans = await rl.question(
+				`\nBlock which? ${c("dim", `[r = recommended (${rec.map((x) => x.n).join(" ") || "—"}) · numbers: 1 3 5-7 · r 9 · Enter = nothing]`)} `,
+			);
+			try {
+				selected = parseSelection([ans], scan);
+				break;
+			} catch (e) {
+				say(c("yellow", e.message));
+			}
+		}
+	} finally {
+		rl.close();
+	}
+	await applyBlock(scan, selected, cfg);
+}
+
+async function cmdBlock(tokens, cfg) {
+	const scan = await loadLastScan();
+	if (!scan) throw new Error("No previous scan. Run this first: adhunt <url>");
+	if (!tokens.length)
+		throw new Error(
+			"Say what to block: adhunt block r   or   adhunt block 1 3 5-7",
+		);
+	const selected = parseSelection(tokens, scan);
+	say(
+		c("dim", `Last scan: ${scan.site} (${new Date(scan.at).toLocaleString()})`),
+	);
+	await applyBlock(scan, selected, cfg);
+}
+
+async function cmdUndo(cfg) {
+	const history = await loadHistory();
+	const batch = history.pop();
+	if (!batch) return say("No adhunt blocks to undo.");
+	requireUrl(cfg);
+	await withPiHole(cfg, await requirePassword(), async (ph) => {
+		for (const item of batch.items) {
+			const removed = await ph.removeDeny(item.kind, item.domain);
+			say(
+				`  ${removed ? c("red", "－") : c("dim", "·")} ${item.target}${item.kind === "regex" ? c("dim", " (+subdomains)") : ""}${removed ? "" : c("dim", " (was already gone)")}`,
+			);
+		}
+	});
+	await saveHistory(history);
+	say(
+		c(
+			"green",
+			`Undid the block from ${batch.site} (${new Date(batch.at).toLocaleString()}).`,
+		),
+	);
+}
+
+async function cmdList(cfg) {
+	requireUrl(cfg);
+	const entries = await withPiHole(cfg, await requirePassword(), (ph) =>
+		ph.listDeny(),
+	);
+	const mine = entries.filter((e) => e.comment?.startsWith("adhunt"));
+	if (!mine.length) return say("adhunt hasn't added anything to Pi-hole yet.");
+	for (const e of mine.sort((a, b) => a.date_added - b.date_added)) {
+		const target =
+			e.kind === "regex"
+				? `${fromWildcard(e.domain) || e.domain} ${c("dim", "(+subdomains)")}`
+				: e.domain;
+		say(
+			`  ${e.enabled ? c("green", "●") : c("dim", "○")} ${target}  ${c("dim", e.comment.replace(/^adhunt · /, ""))}`,
+		);
+	}
+	say(
+		c(
+			"dim",
+			`\n${mine.length} entries · remove one with: adhunt remove <domain>`,
+		),
+	);
+}
+
+async function cmdRemove(target, cfg) {
+	if (!target) throw new Error("Usage: adhunt remove <domain>");
+	requireUrl(cfg);
+	const removed = await withPiHole(cfg, await requirePassword(), async (ph) => {
+		const entries = (await ph.listDeny()).filter((e) =>
+			e.comment?.startsWith("adhunt"),
+		);
+		const hit = entries.find(
+			(e) => e.domain === target || fromWildcard(e.domain) === target,
+		);
+		if (!hit) return null;
+		await ph.removeDeny(hit.kind, hit.domain);
+		return hit;
+	});
+	if (!removed)
+		throw new Error(
+			`"${target}" is not among the entries adhunt added (see: adhunt list).`,
+		);
+	const history = await loadHistory();
+	for (const b of history)
+		b.items = b.items.filter((i) => i.domain !== removed.domain);
+	await saveHistory(history.filter((b) => b.items.length));
+	say(`${c("red", "－")} ${target} removed from Pi-hole.`);
+}
+
+async function cmdClients(cfg) {
+	requireUrl(cfg);
+	const clients = await withPiHole(cfg, await requirePassword(), (ph) =>
+		ph.topClients(20),
+	);
+	say(c("bold", "Devices with the most queries (since Pi-hole last started):"));
+	for (const cl of clients)
+		say(
+			`  ${cl.ip.padEnd(16)} ${String(cl.count).padStart(7)}  ${c("dim", cl.name || "")}`,
+		);
+	say(
+		c(
+			"dim",
+			"\nNext: adhunt device <ip> --minutes 10   (use the app/site with ads on that device right before)",
+		),
+	);
+}
+
+async function cmdDevice(ip, opts, cfg) {
+	if (!ip || !isIP(ip))
+		throw new Error(
+			"Usage: adhunt device <ip> [--minutes 15]   (list IPs with: adhunt clients)",
+		);
+	requireUrl(cfg);
+	const minutes = Number(opts.minutes || 15);
+	const until = Math.floor(Date.now() / 1000);
+	const queries = await withPiHole(cfg, await requirePassword(), (ph) =>
+		ph.queries({ clientIp: ip, from: until - minutes * 60, until }),
+	);
+	const counts = new Map();
+	let alreadyBlocked = 0;
+	for (const q of queries) {
+		if (isBlockedStatus(q.status)) {
+			alreadyBlocked++;
+			continue;
+		}
+		const d = q.domain?.toLowerCase();
+		// Local names (and Tailscale MagicDNS) never reach the internet: nothing to block.
+		if (!d?.includes(".") || LOCAL_NAMES.test(d)) continue;
+		counts.set(d, (counts.get(d) || 0) + 1);
+	}
+	note(
+		`${queries.length} queries in ${minutes} min · ${alreadyBlocked} already blocked · ${counts.size} allowed domains`,
+	);
+	if (!counts.size) return say("No allowed queries in that time range.");
+	note("loading EasyList/EasyPrivacy + TrackerDB…");
+	const engines = await loadEngines(CACHE_DIR);
+	// No real URL: probe the domain as a script/image/xhr/iframe loaded by a third-party site.
+	const requests = [...counts].map(([d, n]) => ({
+		url: `https://${d}/`,
+		types: ["script", "image", "xhr", "sub_frame"],
+		sourceUrl: "https://adhunt.invalid/",
+		weight: n,
+	}));
+	const result = analyze({ requests, requestedUrl: "", finalUrl: "" }, engines);
+	result.site = `device ${ip}`;
+	result.finalUrl = `device ${ip} · last ${minutes} min`;
+	const dns = await makeDnsChecker(cfg);
+	const scan = {
+		mode: "device",
+		at: new Date().toISOString(),
+		...finalize(
+			result,
+			await dns.many(result.candidates.flatMap((x) => x.hosts)),
+		),
+	};
+	await saveLastScan(scan);
+	await review(scan, opts, cfg);
+}
+
+async function cmdSetup(cfg) {
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	try {
+		const current = cfg.piholeUrl || "http://pi.hole";
+		const url =
+			(await rl.question(`Pi-hole URL [${current}]: `)).trim() || current;
+		cfg.piholeUrl = url.replace(/\/+$/, "");
+		say(
+			`Config saved to ${await saveConfig({ piholeUrl: cfg.piholeUrl, dnsServer: cfg.dnsServer })}`,
+		);
+	} finally {
+		rl.close();
+	}
+	if (process.platform === "darwin") {
+		say(
+			"Paste the Pi-hole app password (Settings → Web interface / API → Configure app password).",
+		);
+		say(
+			c(
+				"dim",
+				'It is stored in the macOS Keychain as "adhunt-pihole", never in a file.',
+			),
+		);
+		if (!storePassword()) throw new Error("Could not save it to the Keychain.");
+	} else if (!process.env.PIHOLE_PASSWORD) {
+		say("Outside macOS: set PIHOLE_PASSWORD to the app password.");
+		return;
+	}
+	const password = await requirePassword();
+	const n = await withPiHole(
+		cfg,
+		password,
+		async (ph) => (await ph.listDeny()).length,
+	);
+	const dns = await makeDnsChecker(cfg);
+	say(
+		c(
+			"green",
+			`✓ Connected to Pi-hole (${n} domains on the deny list) · DNS ${dns.server}: doubleclick.net → ${await dns("doubleclick.net")}`,
+		),
+	);
+}
+
+async function main() {
+	const { values: opts, positionals } = parseArgs({
+		allowPositionals: true,
+		options: {
+			mobile: { type: "boolean", short: "m" },
+			wait: { type: "string", short: "w" },
+			click: { type: "boolean" },
+			headed: { type: "boolean" },
+			har: { type: "string" },
+			yes: { type: "boolean", short: "y" },
+			json: { type: "boolean" },
+			minutes: { type: "string" },
+			help: { type: "boolean", short: "h" },
+		},
+	});
+	const [cmd, ...args] = positionals;
+	if (opts.help || (!cmd && !opts.har)) return say(HELP);
+	const cfg = await loadConfig();
+	switch (cmd) {
+		case "scan":
+			return cmdScan(args[0], opts, cfg);
+		case "block":
+			return cmdBlock(args, cfg);
+		case "undo":
+			return cmdUndo(cfg);
+		case "list":
+			return cmdList(cfg);
+		case "remove":
+			return cmdRemove(args[0], cfg);
+		case "device":
+			return cmdDevice(args[0], opts, cfg);
+		case "clients":
+			return cmdClients(cfg);
+		case "setup":
+			return cmdSetup(cfg);
+		default:
+			return cmdScan(cmd, opts, cfg);
+	}
+}
+
+main().catch((e) => {
+	console.error(c("red", `✗ ${e.message}`));
+	process.exit(1);
+});

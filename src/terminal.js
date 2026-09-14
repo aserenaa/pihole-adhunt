@@ -6,6 +6,21 @@ const ESC = "\u001b";
 const BACKSPACE = new Set(["\u007f", "\b"]);
 
 /**
+ * Removes control characters (C0, DEL and C1) from text that came from outside, such as page
+ * titles, HAR files or Pi-hole comments, so it can't move the cursor or rewrite the screen.
+ * keepNewlines keeps line breaks for multi-line messages written by adhunt itself.
+ */
+export function printable(text, { keepNewlines = false } = {}) {
+	let out = "";
+	for (const ch of String(text ?? "")) {
+		const code = ch.codePointAt(0);
+		const control = code < 0x20 || (code >= 0x7f && code <= 0x9f);
+		if (!control || (keepNewlines && ch === "\n")) out += ch;
+	}
+	return out;
+}
+
+/**
  * Leaves raw mode only once stdin has really stopped reading. process.stdin stops its read
  * one tick after pause(); changing the mode while that read is active makes Windows restart
  * it as a line-mode console read, which can only be cancelled by pressing Enter.

@@ -28,7 +28,11 @@ const candidates = [
 		hosts: ["a.track.example", "b.track.example"],
 	}),
 	cand(3, "tagmanager.example", "review"),
-	cand(4, "cdn.example", "unknown", { kind: "exact", reasons: [] }),
+	cand(4, "cdn.example", "unknown", {
+		kind: "exact",
+		reasons: [],
+		label: "CDN\u001b[2J",
+	}),
 ];
 // Rows: 0 BLOCK · 1 ads · 2 track · 3 REVIEW · 4 tagmanager · 5 UNKNOWN · 6 cdn
 //       7 separator · 8 Block selected · 9 Block recommended · 10 Nothing
@@ -112,7 +116,7 @@ test("render: marks, cursor, counts and details of the focused row", () => {
 	assert.match(text, /^Block which\? {2}↑↓ move/);
 	assert.match(text, /\n {2}\[x\] ads\.example \(\+subdomains\)/);
 	assert.match(text, /\n❯ \[x\] track\.example \(\+subdomains\)/);
-	assert.match(text, /\n {2}\[ \] cdn\.example/);
+	assert.match(text, /\n {2}\[ \] cdn\.example +CDN\[2J · 1 req/);
 	assert.match(
 		text,
 		/▸ Block selected \(2\)\n {2}▸ Block recommended \(2\)\n {2}▸ Nothing/,

@@ -29,7 +29,7 @@ import {
 	saveHistory,
 	saveLastScan,
 } from "./state.js";
-import { exitWhenFlushed, prompt } from "./terminal.js";
+import { exitWhenFlushed, printable, prompt } from "./terminal.js";
 
 const LOCAL_NAMES = /\.(lan|local|localdomain|home|internal|arpa|ts\.net)$/;
 
@@ -101,10 +101,10 @@ const short = (list, n = 6) =>
 /** list: false leaves the candidates out, for when the selection menu shows them. */
 function printReport(scan, { list = true } = {}) {
 	say("");
-	say(c("bold", `adhunt · ${scan.finalUrl || scan.site}`));
+	say(c("bold", `adhunt · ${printable(scan.finalUrl || scan.site)}`));
 	const summary = [
-		scan.title?.slice(0, 70),
-		scan.browser,
+		printable(scan.title).slice(0, 70),
+		printable(scan.browser),
 		count(scan.requestCount, "request"),
 		count(scan.hostCount, "domain"),
 	];
@@ -117,7 +117,7 @@ function printReport(scan, { list = true } = {}) {
 		const limit = group === "unknown" && scan.mode === "device" ? 30 : Infinity;
 		for (const cand of items.slice(0, limit)) {
 			const mark = cand.preselected ? c("green", "[x]") : "[ ]";
-			const details = [cand.label, `${cand.requests} req`]
+			const details = [printable(cand.label), `${cand.requests} req`]
 				.filter(Boolean)
 				.join(" · ");
 			say(
@@ -125,7 +125,8 @@ function printReport(scan, { list = true } = {}) {
 			);
 			if (cand.hosts.length > 1 || cand.hosts[0] !== cand.target)
 				say(c("dim", `           hosts: ${short(cand.hosts)}`));
-			for (const r of cand.reasons) say(c(meta.color, `           ${r}`));
+			for (const r of cand.reasons)
+				say(c(meta.color, `           ${printable(r)}`));
 		}
 		if (items.length > limit)
 			say(c("dim", `           … ${items.length - limit} more (see --json)`));
@@ -397,10 +398,10 @@ async function cmdList(cfg) {
 	for (const e of mine.sort((a, b) => a.date_added - b.date_added)) {
 		const target =
 			e.kind === "regex"
-				? `${fromWildcard(e.domain) || e.domain} ${c("dim", "(+subdomains)")}`
-				: e.domain;
+				? `${printable(fromWildcard(e.domain) || e.domain)} ${c("dim", "(+subdomains)")}`
+				: printable(e.domain);
 		say(
-			`  ${e.enabled ? c("green", "●") : c("dim", "○")} ${target}  ${c("dim", e.comment.replace(/^adhunt · /, ""))}`,
+			`  ${e.enabled ? c("green", "●") : c("dim", "○")} ${target}  ${c("dim", printable(e.comment.replace(/^adhunt · /, "")))}`,
 		);
 	}
 	say(
@@ -444,7 +445,7 @@ async function cmdClients(cfg) {
 	say(c("bold", "Devices with the most queries (since Pi-hole last started):"));
 	for (const cl of clients)
 		say(
-			`  ${cl.ip.padEnd(16)} ${String(cl.count).padStart(7)}  ${c("dim", cl.name || "")}`,
+			`  ${printable(cl.ip).padEnd(16)} ${String(cl.count).padStart(7)}  ${c("dim", printable(cl.name))}`,
 		);
 	say(
 		c(
@@ -625,7 +626,9 @@ async function main() {
 main().then(
 	() => exitWhenFlushed(0),
 	(e) => {
-		console.error(c("red", `✗ ${e.message}`));
+		console.error(
+			c("red", `✗ ${printable(e.message, { keepNewlines: true })}`),
+		);
 		exitWhenFlushed(1);
 	},
 );

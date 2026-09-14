@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
 
-import { exitWhenFlushed, prompt } from "../src/terminal.js";
+import { exitWhenFlushed, printable, prompt } from "../src/terminal.js";
 
 const BACKSPACE = "\u007f";
 const CTRL_C = "\u0003";
@@ -93,4 +93,18 @@ test("exitWhenFlushed exits once every stream has flushed", () => {
 	callbacks[1]();
 	assert.equal(exitedWith, 3);
 	process.exitCode = 0;
+});
+
+test("printable strips control characters but keeps text and emoji", () => {
+	const ESC = "\u001b";
+	assert.equal(
+		printable(`News${ESC}]0;owned\u0007 — café 🎉`),
+		"News]0;owned — café 🎉",
+	);
+	assert.equal(printable(`a\u009b2Jb\r\nc`), "a2Jbc");
+	assert.equal(
+		printable("line 1\nline 2", { keepNewlines: true }),
+		"line 1\nline 2",
+	);
+	assert.equal(printable(undefined), "");
 });

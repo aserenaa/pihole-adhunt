@@ -5,7 +5,7 @@ import {
 	moveCursor,
 } from "node:readline";
 
-import { restoreTerminal } from "./terminal.js";
+import { printable, restoreTerminal } from "./terminal.js";
 
 const GROUP_TITLES = {
 	block: "🔴 BLOCK",
@@ -127,8 +127,9 @@ export function onKey(rows, state, key = {}) {
 function paint(segments, width, style) {
 	let left = width;
 	let out = "";
-	for (const [name, text] of segments) {
+	for (const [name, raw] of segments) {
 		if (left <= 0) break;
+		const text = printable(raw);
 		const cut = text.length > left ? `${text.slice(0, left - 1)}…` : text;
 		left -= cut.length;
 		out += name ? style(name, cut) : cut;
